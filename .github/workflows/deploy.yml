@@ -26,7 +26,7 @@ env:
 jobs:
   test:
     name: Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, squidsec]
     steps:
       - uses: actions/checkout@v7
 
@@ -59,7 +59,7 @@ jobs:
   build-and-push:
     name: Build and push images
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, squidsec]
     # Environment secrets (prod) are only available when the job declares this.
     environment: prod
     outputs:
@@ -113,7 +113,7 @@ jobs:
   deploy:
     name: Deploy to DigitalOcean
     needs: build-and-push
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, squidsec]
     if: github.ref == 'refs/heads/main'
     # Must match the Environment name under Settings -> Environments (secrets live there).
     environment: prod
