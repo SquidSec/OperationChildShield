@@ -21,7 +21,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/dotnetrussell/operationchildshield
+  IMAGE_PREFIX: ghcr.io/squidsec/operationchildshield
 
 jobs:
   test:

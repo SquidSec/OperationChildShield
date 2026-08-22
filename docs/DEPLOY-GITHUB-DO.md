@@ -61,8 +61,8 @@ Check the deploy job log secret-presence lines. If host/user/key are EMPTY, secr
 2. Workflow **Build and deploy** (`.github/workflows/deploy.yml`):
    - Runs backend + frontend tests
    - Builds Docker images and pushes to GHCR:
-     - `ghcr.io/dotnetrussell/operationchildshield-backend:main`
-     - `ghcr.io/dotnetrussell/operationchildshield-frontend:main`
+      - `ghcr.io/squidsec/operationchildshield-backend:main`
+      - `ghcr.io/squidsec/operationchildshield-frontend:main`
    - SSHs to the droplet, pulls images, restarts Compose
 3. Smoke-checks `/api/health`
 

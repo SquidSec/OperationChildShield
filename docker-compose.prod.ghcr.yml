@@ -2,14 +2,14 @@
 # Used by GitHub Actions deploy. Server still needs local Caddyfile + .env.
 #
 # Images (built on main after CI):
-#   ghcr.io/dotnetrussell/operationchildshield-backend:main
-#   ghcr.io/dotnetrussell/operationchildshield-frontend:main
+#   ghcr.io/squidsec/operationchildshield-backend:main
+#   ghcr.io/squidsec/operationchildshield-frontend:main
 #
 # Override tag: IMAGE_TAG=sha-abc123 docker compose -f docker-compose.prod.ghcr.yml up -d
 
 services:
   backend:
-    image: ghcr.io/dotnetrussell/operationchildshield-backend:${IMAGE_TAG:-main}
+    image: ghcr.io/squidsec/operationchildshield-backend:${IMAGE_TAG:-main}
     environment:
       - CONGRESS_API_KEY=${CONGRESS_API_KEY}
       - SMTP_HOST=${SMTP_HOST:-}
@@ -38,7 +38,7 @@ services:
       start_period: 40s
 
   frontend:
-    image: ghcr.io/dotnetrussell/operationchildshield-frontend:${IMAGE_TAG:-main}
+    image: ghcr.io/squidsec/operationchildshield-frontend:${IMAGE_TAG:-main}
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost}
       - API_URL=http://backend:8000

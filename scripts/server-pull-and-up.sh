@@ -23,7 +23,7 @@ export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://$(curl -fsS ifconfig.m
 
 # Public GHCR packages can be pulled anonymously; if private, set GHCR_TOKEN in .env
 if [[ -n "${GHCR_TOKEN:-}" ]]; then
-  echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-dotnetrussell}" --password-stdin
+  echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-squidsec}" --password-stdin
 fi
 
 # Ensure cache/PII volume is writable by non-root backend user before start.
