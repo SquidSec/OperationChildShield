@@ -1,11 +1,8 @@
 import { Suspense } from "react";
-import { ImpactStrip } from "@/components/ImpactStrip";
-import { MissionQuestions } from "@/components/MissionQuestions";
 import { PolicyLegend } from "@/components/PolicyLegend";
 import { MemberFiltersBar } from "@/components/MemberFiltersBar";
 import { PoliticianGrid } from "@/components/PoliticianGrid";
 import { SearchBar } from "@/components/SearchBar";
-import { nonprofitStatusSummary } from "@/lib/nonprofit";
 import {
   getMembers,
   LANDING_PAGE_SIZE,
@@ -85,29 +82,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <div className="page-container py-8 min-w-0">
-      <p className="text-center text-muted text-sm mb-2 max-w-2xl mx-auto leading-relaxed px-1">
-        A public record of child safety, anti-abuse, and anti-trafficking legislation
-        in Congress — which bills are moving, how members voted or abstained, and
-        how to act.
-      </p>
-      <p className="text-center text-muted text-xs mb-6 max-w-3xl mx-auto leading-relaxed px-1">
-        {nonprofitStatusSummary()}
-      </p>
-
-      <MissionQuestions className="mb-8" />
-      <Suspense fallback={null}>
-        <ImpactStrip className="mb-8" />
-      </Suspense>
-
-      <p className="text-center text-muted text-xs mb-4 max-w-3xl mx-auto leading-relaxed px-1">
-        Search the full <strong className="text-foreground">House and Senate</strong>{" "}
-        directory. House records use roll-call votes on bills we track. Senate members
-        are listed for reference when per-member floor votes are not available.
-        Eligible members who sat out a vote appear as &quot;Not Voting.&quot;
-      </p>
-
-      <PolicyLegend className="mb-8" />
-
       <Suspense
         fallback={
           <div className="h-[72px] max-w-[620px] mx-auto mb-10 bg-surface/50 rounded-xl animate-pulse" />
@@ -115,6 +89,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       >
         <SearchBar />
       </Suspense>
+
+      <p className="text-center text-muted text-sm mb-4 max-w-2xl mx-auto leading-relaxed px-1">
+        Search the full <strong className="text-foreground">House and Senate</strong>{" "}
+        directory. House records use roll-call votes on bills we track. Senate members
+        are listed for reference when per-member floor votes are not available.
+        Eligible members who sat out a vote appear as &quot;Not Voting.&quot;
+      </p>
+
+      <PolicyLegend className="mb-8" />
 
       <Suspense fallback={<div className="h-20 mb-8 bg-surface/50 rounded-xl animate-pulse" />}>
         <MemberFiltersBar />

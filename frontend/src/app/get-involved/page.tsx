@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ConstituentToolkit } from "@/components/ConstituentToolkit";
-import { ImpactStrip } from "@/components/ImpactStrip";
 import { InvolveForm } from "@/components/InvolveForm";
 
 export const metadata: Metadata = {
@@ -51,7 +50,6 @@ export default function GetInvolvedPage() {
       </ol>
 
       <ConstituentToolkit className="mt-8" />
-      <ImpactStrip className="mt-8" />
 
       <div className="mt-8 relative">
         <InvolveForm />

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DonationForm } from "@/components/DonationForm";
 import { ENABLE_DONATE_PAGE } from "@/lib/feature-flags";
-import { nonprofitStatusSummary } from "@/lib/nonprofit";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +24,12 @@ export default function DonatePage() {
       <h1 className="text-3xl font-bold text-blue mt-4">Fuel the Mission</h1>
       <p className="mt-3 text-muted leading-relaxed max-w-2xl">
         Operation Child Shield is building a lasting public record of how Congress
-        votes on child protection. {nonprofitStatusSummary()} Choose a suggested
-        donation below to preview the experience. Payment processing is not yet
-        connected.
+        votes on child protection. See{" "}
+        <Link href="/organization" className="text-red font-semibold hover:underline">
+          the organization
+        </Link>{" "}
+        for tax-exempt status. Choose a suggested donation below to preview the
+        experience. Payment processing is not yet connected.
       </p>
 
       <div className="mt-10">

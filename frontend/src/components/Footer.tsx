@@ -1,6 +1,5 @@
 import { SocialLinks } from "@/components/SocialLinks";
 import { ENABLE_BOARD_PAGE } from "@/lib/feature-flags";
-import { NONPROFIT, nonprofitStatusSummary } from "@/lib/nonprofit";
 
 export function Footer() {
   return (
@@ -30,6 +29,9 @@ export function Footer() {
         <a href="/learn" className="underline hover:opacity-100">
           How It Works
         </a>
+        <a href="/organization" className="underline hover:opacity-100">
+          The Organization
+        </a>
         <a href="/partners" className="underline hover:opacity-100">
           Our Allies
         </a>
@@ -52,9 +54,9 @@ export function Footer() {
       </p>
       <SocialLinks variant="footer" className="mt-4 text-sm opacity-85" />
       <p className="mt-3 mb-0 text-xs opacity-70 max-w-xl mx-auto">
-        {nonprofitStatusSummary()} {NONPROFIT.mailingAddress}.{" "}
-        <a href="/about#tax-exempt" className="underline hover:opacity-100">
-          Tax-exempt status
+        501(c)(3) public charity.{" "}
+        <a href="/organization" className="underline hover:opacity-100">
+          About the organization
         </a>
         .
       </p>

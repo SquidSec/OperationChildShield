@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { href: "/get-involved", label: "Join Us" },
   { href: "/learn", label: "How It Works" },
   { href: "/about", label: "Our Policy" },
+  { href: "/organization", label: "The Organization" },
   { href: "/partners", label: "Our Allies" },
   ...(ENABLE_BOARD_PAGE ? [{ href: "/board", label: "Leadership" }] : []),
   { href: "/disclaimer", label: "Disclaimer" },

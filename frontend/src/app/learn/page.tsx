@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ImpactStrip } from "@/components/ImpactStrip";
 import { MissionQuestions } from "@/components/MissionQuestions";
 import { NcmecReportBanner } from "@/components/NcmecReportBanner";
 
@@ -31,6 +32,7 @@ export default function LearnPage() {
       </p>
 
       <MissionQuestions className="mt-8" />
+      <ImpactStrip className="mt-8" />
 
       <div className="mt-8">
         <NcmecReportBanner variant="card" />
