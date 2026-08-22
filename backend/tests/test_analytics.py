@@ -28,7 +28,6 @@ def test_track_persists_to_sqlite(tmp_path, monkeypatch):
     assert r2.status_code == 200
     assert r3.status_code == 200
 
-    # No public read API
     assert client.get("/api/analytics").status_code == 404
     assert client.get("/api/analytics?days=7").status_code == 404
 
@@ -52,6 +51,37 @@ def test_track_persists_to_sqlite(tmp_path, monkeypatch):
     assert count == 3
     assert paths["/metrics"] == 2
     assert paths["/learn"] == 1
+
+
+def test_tracks_actions_and_exposes_aggregates_only(tmp_path, monkeypatch):
+    client = _app(tmp_path, monkeypatch)
+
+    assert client.post(
+        "/api/analytics/event", json={"path": "/member/A000055", "action": "share"}
+    ).status_code == 200
+    assert client.post(
+        "/api/analytics/event",
+        json={"path": "/member/A000055", "action": "contact_congress"},
+    ).status_code == 200
+    assert client.post(
+        "/api/analytics/event", json={"path": "/", "action": "involve_signup"}
+    ).status_code == 400
+    assert client.post(
+        "/api/analytics/event", json={"path": "/", "action": "drop_table"}
+    ).status_code == 400
+
+    from app.analytics_store import record_action
+
+    record_action("involve_signup", path="/get-involved")
+
+    impact = client.get("/api/impact")
+    assert impact.status_code == 200
+    body = impact.json()
+    assert body["shares"] == 1
+    assert body["congressContacts"] == 1
+    assert body["signups"] == 1
+    assert "path" not in body
+    assert "events" not in body
 
 
 def test_rejects_invalid_path(tmp_path, monkeypatch):

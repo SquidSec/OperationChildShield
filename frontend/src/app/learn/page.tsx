@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MissionQuestions } from "@/components/MissionQuestions";
 import { NcmecReportBanner } from "@/components/NcmecReportBanner";
 
 export const metadata: Metadata = {
@@ -26,9 +27,10 @@ export default function LearnPage() {
         <strong className="text-foreground">protect, educate, and mobilize</strong>
         {" "}
         with voting records from Congress.gov compared to board-adopted policy
-        positions. This page explains how to use the site if you need clarity or
-        want to help.
+        positions. Use this page if you need clarity or want to act.
       </p>
+
+      <MissionQuestions className="mt-8" />
 
       <div className="mt-8">
         <NcmecReportBanner variant="card" />

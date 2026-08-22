@@ -226,7 +226,17 @@ export async function submitInvolveSignup(
   return res.json();
 }
 
-/** Fire-and-forget page view ingest. There is no public read API for analytics. */
+export type TrackedAction = "share" | "contact_congress";
+
+export type SiteImpact = {
+  pageViews: number;
+  shares: number;
+  congressContacts: number;
+  signups: number;
+  updatedAt: string;
+};
+
+/** Fire-and-forget page view ingest. */
 export async function trackPageView(path: string, referrer = ""): Promise<void> {
   try {
     await fetch(`${metricsApiBase()}/api/analytics/event`, {
@@ -237,5 +247,30 @@ export async function trackPageView(path: string, referrer = ""): Promise<void> 
     });
   } catch {
     /* non-blocking */
+  }
+}
+
+/** Fire-and-forget allow-listed action (share / contact Congress). */
+export async function trackAction(
+  action: TrackedAction,
+  path = "/"
+): Promise<void> {
+  try {
+    await fetch(`${metricsApiBase()}/api/analytics/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, action }),
+      keepalive: true,
+    });
+  } catch {
+    /* non-blocking */
+  }
+}
+
+export async function getImpact(): Promise<SiteImpact | null> {
+  try {
+    return await fetchApi<SiteImpact>("/api/impact", 8_000);
+  } catch {
+    return null;
   }
 }

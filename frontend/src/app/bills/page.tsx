@@ -106,7 +106,9 @@ export default async function BillsPage() {
 
       <h1 className="text-3xl font-bold text-blue mt-4">The Bills That Matter</h1>
       <p className="mt-2 text-muted max-w-3xl">
-        {bills.length} bills monitored across the 117th-119th Congresses.{" "}
+        Which bills protecting children from exploitation and trafficking are moving
+        through Congress? {bills.length} bills monitored across the 117th-119th
+        Congresses.{" "}
         <strong>{scoredCount} bills</strong> have recorded House roll-call votes on
         verified child-protection legislation. Bills passed by voice vote or in the
         Senate are tracked for context but do not produce per-member House vote records.

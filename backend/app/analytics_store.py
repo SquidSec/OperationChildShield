@@ -1,4 +1,4 @@
-"""SQLite-backed page-view storage (server-side only; no public read surface)."""
+"""SQLite-backed page-view and action storage. Public read is aggregates only."""
 
 from __future__ import annotations
 
@@ -19,6 +19,12 @@ _initialized = False
 # Soft caps to resist unbounded disk growth from open write endpoint.
 _MAX_PAGE_VIEWS = 500_000
 _PRUNE_TO = 400_000
+_MAX_ACTION_EVENTS = 200_000
+_ACTION_PRUNE_TO = 160_000
+
+CLIENT_ACTIONS = frozenset({"share", "contact_congress"})
+SERVER_ACTIONS = frozenset({"involve_signup"})
+ALLOWED_ACTIONS = CLIENT_ACTIONS | SERVER_ACTIONS
 
 
 def _db_path() -> Path:
@@ -62,6 +68,19 @@ def init_analytics_db() -> None:
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_page_views_path ON page_views(path)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS action_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    path TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_action_events_name ON action_events(name)"
             )
             conn.commit()
             _initialized = True
@@ -128,3 +147,85 @@ def record_page_view(
         finally:
             conn.close()
         _harden_db_file()
+
+
+def _maybe_prune_actions(conn: sqlite3.Connection) -> None:
+    count = conn.execute("SELECT COUNT(*) FROM action_events").fetchone()[0]
+    if count <= _MAX_ACTION_EVENTS:
+        return
+    to_delete = count - _ACTION_PRUNE_TO
+    logger.warning("Pruning analytics action_events: deleting ~%s oldest rows", to_delete)
+    conn.execute(
+        """
+        DELETE FROM action_events
+        WHERE id IN (
+            SELECT id FROM action_events ORDER BY created_at ASC, id ASC LIMIT ?
+        )
+        """,
+        (to_delete,),
+    )
+    conn.commit()
+
+
+def record_action(
+    name: str,
+    *,
+    path: str | None = None,
+    created_at: datetime | None = None,
+) -> bool:
+    action = (name or "").strip().lower()
+    if action not in ALLOWED_ACTIONS:
+        return False
+
+    ensure_initialized()
+    clean_path = (path or "/").strip() or "/"
+    if len(clean_path) > 500:
+        clean_path = clean_path[:500]
+    if not clean_path.startswith("/") or clean_path.startswith("//"):
+        clean_path = "/"
+
+    ts = (created_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
+
+    with _lock:
+        conn = _connect()
+        try:
+            conn.execute(
+                """
+                INSERT INTO action_events (name, path, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (action, clean_path, ts.isoformat()),
+            )
+            conn.commit()
+            _maybe_prune_actions(conn)
+        finally:
+            conn.close()
+        _harden_db_file()
+    return True
+
+
+def get_impact_counts() -> dict[str, int | str]:
+    ensure_initialized()
+    with _lock:
+        conn = _connect()
+        try:
+            page_views = conn.execute("SELECT COUNT(*) FROM page_views").fetchone()[0]
+
+            def count_action(action_name: str) -> int:
+                return int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM action_events WHERE name = ?",
+                        (action_name,),
+                    ).fetchone()[0]
+                )
+
+            return {
+                "pageViews": int(page_views),
+                "shares": count_action("share"),
+                "congressContacts": count_action("contact_congress"),
+                "signups": count_action("involve_signup"),
+                "updatedAt": datetime.now(timezone.utc).isoformat(),
+            }
+        finally:
+            conn.close()
+
