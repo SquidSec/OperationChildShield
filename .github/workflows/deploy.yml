@@ -44,7 +44,7 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
           python -m pytest -q --tb=short
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
