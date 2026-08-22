@@ -184,6 +184,8 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
         run: |
           set -euo pipefail
           PATH_ON_SERVER="${DEPLOY_PATH:-/opt/operationchildshield}"
@@ -191,6 +193,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${PATH_ON_SERVER}' && chmod +x scripts/server-pull-and-up.sh && \
+             GHCR_TOKEN='${GHCR_TOKEN}' \
+             GHCR_USER='${GHCR_USER}' \
              IMAGE_TAG='${IMAGE_TAG}' \
              NEXT_PUBLIC_API_URL='${SITE_URL}' \
              APP_DIR='${PATH_ON_SERVER}' \
