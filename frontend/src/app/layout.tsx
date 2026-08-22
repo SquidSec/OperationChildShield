@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { NcmecReportBanner } from "@/components/NcmecReportBanner";
+import { NonprofitBadge } from "@/components/NonprofitBadge";
 import { VisitTracker } from "@/components/VisitTracker";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
@@ -35,6 +36,10 @@ export const metadata: Metadata = {
     template: `%s • ${SITE_TITLE}`,
   },
   description: SITE_DESCRIPTION,
+  icons: {
+    icon: "/images/ocs-v2-icon-inverted.png",
+    apple: "/images/ocs-v2-icon-inverted.png",
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -84,6 +89,7 @@ export default async function RootLayout({
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />
+        <NonprofitBadge />
         <Suspense fallback={null}>
           <VisitTracker />
         </Suspense>
