@@ -14,7 +14,7 @@ jobs:
   squidgate:
     if: github.event.pull_request.head.repo.full_name == github.repository
     name: SquidGate Pro
-    runs-on: [self-hosted, Linux, X64, squidsec]
+    runs-on: ubuntu-latest
     env:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
     steps:
