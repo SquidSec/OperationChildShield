@@ -4,11 +4,14 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app import analytics_store
 from app.routes import involve
 
 
 def _app(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setattr(involve.settings, "cache_dir", str(tmp_path))
+    monkeypatch.setattr(analytics_store.settings, "cache_dir", str(tmp_path))
+    analytics_store._initialized = False
     app = FastAPI()
     app.include_router(involve.router, prefix="/api")
     return TestClient(app)

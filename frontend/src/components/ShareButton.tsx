@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { trackAction } from "@/lib/api";
 import { buildSharePayload, type ShareReportInput } from "@/lib/share";
 import {
   buildEmailShareUrl,
@@ -44,6 +45,12 @@ export function ShareButton({
 
   const payload = buildSharePayload(input);
 
+  const markShare = useCallback(() => {
+    const path =
+      typeof window !== "undefined" ? window.location.pathname || "/" : "/";
+    void trackAction("share", path);
+  }, []);
+
   const showFeedback = useCallback((message: string) => {
     setFeedback(message);
     window.setTimeout(() => setFeedback(null), 2000);
@@ -73,6 +80,7 @@ export function ShareButton({
   async function copyToClipboard(value: string, successMessage: string) {
     try {
       await navigator.clipboard.writeText(value);
+      markShare();
       showFeedback(successMessage);
       setOpen(false);
     } catch {
@@ -84,6 +92,7 @@ export function ShareButton({
     if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
       try {
         await navigator.share(payload);
+        markShare();
         setOpen(false);
         return;
       } catch {
@@ -133,7 +142,10 @@ export function ShareButton({
             target="_blank"
             rel="noopener noreferrer"
             className={`${itemClass} no-underline`}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              markShare();
+              setOpen(false);
+            }}
           >
             Post on X
           </a>
@@ -143,7 +155,10 @@ export function ShareButton({
             target="_blank"
             rel="noopener noreferrer"
             className={`${itemClass} no-underline`}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              markShare();
+              setOpen(false);
+            }}
           >
             Post on Facebook
           </a>
@@ -153,7 +168,10 @@ export function ShareButton({
             target="_blank"
             rel="noopener noreferrer"
             className={`${itemClass} no-underline`}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              markShare();
+              setOpen(false);
+            }}
           >
             Share on LinkedIn
           </a>
@@ -161,7 +179,10 @@ export function ShareButton({
             role="menuitem"
             href={buildEmailShareUrl(payload.title, payload.text, payload.url)}
             className={`${itemClass} no-underline`}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              markShare();
+              setOpen(false);
+            }}
           >
             Email this record
           </a>

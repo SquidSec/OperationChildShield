@@ -26,7 +26,7 @@ const SITE_URL =
 
 const SITE_TITLE = "Operation Child Shield";
 const SITE_DESCRIPTION =
-  "See how Congress voted on child safety. Public records from Congress.gov, checked against Operation Child Shield policy.";
+  "Which child-protection bills are moving, how members voted or abstained, and how to press Congress. A 501(c)(3) public record from Congress.gov.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

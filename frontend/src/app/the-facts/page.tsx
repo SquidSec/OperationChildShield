@@ -29,6 +29,15 @@ export default function TheFactsPage() {
       </div>
 
       <h1 className="text-3xl font-bold text-blue mt-4">Just the Facts</h1>
+      <p className="mt-4 text-muted leading-relaxed max-w-3xl">
+        Are current laws protecting children from exploitation and trafficking?
+        These write-ups show what the bills we track actually do. Compare that
+        with{" "}
+        <Link href="/" className="text-red font-semibold hover:underline">
+          how members voted or abstained
+        </Link>{" "}
+        and decide from the public record.
+      </p>
 
       <nav aria-label="Fact topics" className="mt-8 flex flex-wrap gap-2">
         {POLICY_DISTILLATIONS.map((policy) => (

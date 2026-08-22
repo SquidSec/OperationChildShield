@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { NonprofitStatus } from "@/components/NonprofitStatus";
 
 export const metadata: Metadata = {
   title: "How We Read the Votes",
@@ -57,6 +58,11 @@ export default function AboutPage() {
               Mission
             </a>
           </li>
+          <li>
+            <a href="#tax-exempt" className="text-red hover:underline">
+              Tax-exempt status
+            </a>
+          </li>
         </ul>
       </nav>
 
@@ -104,6 +110,7 @@ export default function AboutPage() {
             &quot;champion/failure&quot; labels.
           </li>
           <li>Editorial endorsements or opposition to any candidate or officeholder.</li>
+          <li>Our IRS employer identification number.</li>
         </ul>
       </section>
 
@@ -129,11 +136,15 @@ export default function AboutPage() {
       >
         <h2 className="text-xl font-bold text-blue">Our Mission</h2>
         <p className="mt-3 text-muted leading-relaxed">
-          Children depend on adults to protect them. Operation Child Shield gives
-          the public clear information about how elected officials vote when
-          children&apos;s safety is on the line.
+          Children depend on adults to protect them. Operation Child Shield
+          publishes a public record so anyone can see which child-protection bills
+          are moving, how members voted or abstained, whether current law matches
+          board-adopted policy, and how to press Congress for stronger
+          anti-exploitation protections.
         </p>
       </section>
+
+      <NonprofitStatus className="mt-10" />
 
       <p className="mt-10 text-sm text-muted">
         See our full{" "}

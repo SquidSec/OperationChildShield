@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ImpactStrip } from "@/components/ImpactStrip";
 import { MetricsCharts } from "@/components/metrics/MetricsCharts";
 import { StatePerformanceTable } from "@/components/metrics/StatePerformanceTable";
 import { getMetrics, getMetricsExportUrl } from "@/lib/api";
@@ -82,8 +83,11 @@ export default async function MetricsPage() {
       <h1 className="text-3xl font-bold text-blue mt-4">See the Numbers</h1>
       <p className="mt-4 text-muted leading-relaxed max-w-3xl">
         Roll-call totals and state-level metrics on tracked child safety bills.
-        Use the state table below to open members by state.
+        Use the state table below to open members by state. Action counts below
+        show whether people are sharing the record and contacting Congress.
       </p>
+
+      <ImpactStrip className="mt-8" />
 
       {error ? (
         <p className="mt-6 text-red">{error}</p>

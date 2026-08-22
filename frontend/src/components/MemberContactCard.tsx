@@ -1,3 +1,6 @@
+"use client";
+
+import { trackAction } from "@/lib/api";
 import type { MemberContact } from "@/lib/types";
 
 function formatLocation(city: string | null, zipCode: string | number | null): string | null {
@@ -5,13 +8,23 @@ function formatLocation(city: string | null, zipCode: string | number | null): s
   return parts.length ? parts.join(", ") : null;
 }
 
-export function MemberContactCard({ contact }: { contact: MemberContact }) {
+export function MemberContactCard({
+  contact,
+  actionPath,
+}: {
+  contact: MemberContact;
+  actionPath?: string;
+}) {
   const location = formatLocation(contact.city, contact.zip_code);
   const hasContent = Boolean(
     contact.office_address || contact.phone || contact.website_url
   );
 
   if (!hasContent) return null;
+
+  function markContact() {
+    void trackAction("contact_congress", actionPath || "/");
+  }
 
   return (
     <section className="mt-6 rounded-lg border border-card-border bg-surface-muted p-5">
@@ -39,6 +52,7 @@ export function MemberContactCard({ contact }: { contact: MemberContact }) {
               <a
                 href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`}
                 className="text-red font-semibold hover:underline"
+                onClick={markContact}
               >
                 {contact.phone}
               </a>
@@ -54,6 +68,7 @@ export function MemberContactCard({ contact }: { contact: MemberContact }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-red font-semibold hover:underline break-all"
+                onClick={markContact}
               >
                 {contact.website_url.replace(/^https?:\/\//, "")}
               </a>

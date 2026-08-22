@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
+from app.analytics_store import record_action
 from app.config import settings
 from app.email_smtp import auto_reply_involve_signup, notify_involve_signup
 from app.security import client_ip, rate_limit
@@ -137,6 +138,11 @@ async def submit_involve_signup(body: InvolveSignupRequest, request: Request):
         interest or "none",
         body.state or "none",
     )
+
+    try:
+        record_action("involve_signup", path="/get-involved")
+    except Exception:
+        logger.exception("Failed to record involve signup action")
 
     # Email ops (+ optional auto-reply). Persistence already succeeded; do not fail
     # the HTTP response if SMTP is down — signups stay in involve_signups.jsonl.

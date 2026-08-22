@@ -32,7 +32,7 @@ Independent agentic recon + AI analysis of the production site (headers, surface
 | `/learn` | Education for people seeking help/clarity and people who want to take action |
 | `/get-involved` | Signup form for volunteers, advocates, media, and partners |
 | `/the-facts` | **The Facts** — neutral bill bullets with Congress.gov deep links |
-| `/about` | Policy positions and methodology (links to The Facts) |
+| `/about` | Policy positions, methodology, and 501(c)(3) public-charity status (EIN not published) |
 | `/board` | Board of directors (enabled via `ENABLE_BOARD_PAGE`) |
 | `/disclaimer` | Legal disclaimer (entertainment purposes, public data sources, contact) |
 | `/partners` | Partner organizations |
@@ -59,7 +59,8 @@ Set `ENABLE_DONATE_PAGE` to `true`, add nav links in `Header.tsx` / `Footer.tsx`
 | `GET /api/metrics` | Bill-level roll-call aggregates plus `byState` House policy-consistency totals (no grades/rankings) |
 | `GET /api/metrics/export` | CSV export of per-bill roll-call summaries |
 | `POST /api/involve` | Volunteer/advocate signup (JSON body; stored as JSONL under `CACHE_DIR`) |
-| `POST /api/analytics/event` | Ingest only — records a page view into server-side SQLite (`analytics.db`). **No public read API or UI.** Inspect via SSH + a SQLite browser. |
+| `POST /api/analytics/event` | Records a page view, or an allow-listed action (`share`, `contact_congress`), into server-side SQLite (`analytics.db`). Raw events are not exposed. |
+| `GET /api/impact` | Aggregate counts only: page views, shares, Congress contacts started, and signups. |
 
 Interactive API docs: `http://localhost:8000/docs` (local).
 
@@ -240,7 +241,7 @@ Deployment scripts and production configs (`deploy-prod.sh`, `docker-compose.pro
 
 ## Testing
 
-**132 unit tests** total — **97 backend** (pytest) + **35 frontend** (Vitest). CI runs both suites on every push and pull request to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+**177 unit tests** total — **122 backend** (pytest) + **55 frontend** (Vitest). CI runs both suites on every push and pull request to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 ```bash
 # All tests (recommended — uses backend venv via scripts/test.sh)

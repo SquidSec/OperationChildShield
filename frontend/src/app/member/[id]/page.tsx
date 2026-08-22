@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { ConstituentToolkit } from "@/components/ConstituentToolkit";
 import { MemberContactCard } from "@/components/MemberContactCard";
 import { MemberVotePieChart } from "@/components/MemberVotePieChart";
 import { MemberVoteStats } from "@/components/MemberVoteStats";
@@ -13,6 +14,7 @@ import {
   formatDisplayName,
   summarizeMemberVotes,
 } from "@/lib/format";
+import { getReportPageUrl } from "@/lib/share";
 import { getReportCard } from "@/lib/api";
 import { getStateCode } from "@/lib/states";
 
@@ -176,7 +178,17 @@ export default async function MemberPage({ params }: MemberPageProps) {
             </a>
           </div>
 
-          {card.contact && <MemberContactCard contact={card.contact} />}
+          {card.contact && (
+            <MemberContactCard
+              contact={card.contact}
+              actionPath={`/member/${card.bioguide_id}`}
+            />
+          )}
+          <ConstituentToolkit
+            className="mt-6"
+            officialName={`${prefix} ${displayName}`}
+            reportUrl={getReportPageUrl(card.bioguide_id)}
+          />
         </div>
       </div>
 

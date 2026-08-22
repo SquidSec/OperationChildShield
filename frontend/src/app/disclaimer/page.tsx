@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { NonprofitStatus } from "@/components/NonprofitStatus";
 
 export const metadata: Metadata = {
   title: "Disclaimer",
@@ -76,6 +77,8 @@ export default function DisclaimerPage() {
           site you acknowledge this limited technical logging.
         </p>
       </section>
+
+      <NonprofitStatus className="mt-10" />
 
       <section className="mt-10 bg-surface rounded-[10px] p-6 border border-card-border shadow-sm">
         <h2 className="text-xl font-bold text-blue">Disputes &amp; Concerns</h2>
