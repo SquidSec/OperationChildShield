@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { NonprofitStatus } from "@/components/NonprofitStatus";
 
 export const metadata: Metadata = {
   title: "How We Read the Votes",
@@ -58,11 +57,6 @@ export default function AboutPage() {
               Mission
             </a>
           </li>
-          <li>
-            <a href="#tax-exempt" className="text-red hover:underline">
-              Tax-exempt status
-            </a>
-          </li>
         </ul>
       </nav>
 
@@ -110,7 +104,6 @@ export default function AboutPage() {
             &quot;champion/failure&quot; labels.
           </li>
           <li>Editorial endorsements or opposition to any candidate or officeholder.</li>
-          <li>Our IRS employer identification number.</li>
         </ul>
       </section>
 
@@ -144,10 +137,12 @@ export default function AboutPage() {
         </p>
       </section>
 
-      <NonprofitStatus className="mt-10" />
-
       <p className="mt-10 text-sm text-muted">
-        See our full{" "}
+        Organization and tax-exempt status:{" "}
+        <Link href="/organization" className="text-blue font-medium hover:underline">
+          The Organization
+        </Link>
+        . See our full{" "}
         <Link href="/disclaimer" className="text-blue font-medium hover:underline">
           legal disclaimer
         </Link>{" "}

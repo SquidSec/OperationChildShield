@@ -152,9 +152,13 @@ export default function BoardPage() {
 
       <h1 className="text-3xl font-bold text-blue mt-4">The People Behind the Mission</h1>
       <p className="mt-3 text-muted leading-relaxed max-w-2xl">
-        Operation Child Shield is a 501(c)(3) public charity guided by leaders
-        committed to protecting children, advancing transparency, and holding
-        elected officials accountable through public data.
+        Operation Child Shield is guided by leaders committed to protecting children,
+        advancing transparency, and holding elected officials accountable through
+        public data.{" "}
+        <Link href="/organization" className="text-red font-semibold hover:underline">
+          About the organization
+        </Link>
+        .
       </p>
 
       {[

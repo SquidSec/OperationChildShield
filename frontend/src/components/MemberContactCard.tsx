@@ -11,9 +11,11 @@ function formatLocation(city: string | null, zipCode: string | number | null): s
 export function MemberContactCard({
   contact,
   actionPath,
+  className = "",
 }: {
   contact: MemberContact;
   actionPath?: string;
+  className?: string;
 }) {
   const location = formatLocation(contact.city, contact.zip_code);
   const hasContent = Boolean(
@@ -27,7 +29,9 @@ export function MemberContactCard({
   }
 
   return (
-    <section className="mt-6 rounded-lg border border-card-border bg-surface-muted p-5">
+    <section
+      className={`rounded-[10px] border border-card-border bg-surface p-5 shadow-sm ${className}`}
+    >
       <h2 className="text-sm font-bold uppercase tracking-wide text-blue m-0">
         Contact Your Representative
       </h2>

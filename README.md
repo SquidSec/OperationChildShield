@@ -29,10 +29,11 @@ Independent agentic recon + AI analysis of the production site (headers, surface
 | `/bills` | 30 tracked bills in three sections: House roll-call (scored), floor action (tracked only), introduced |
 | `/metrics` | Bill-level roll-call statistics, **state heat map**, state policy-consistency table, charts |
 | `/states/[code]` | State overview: House policy-consistency KPIs and member list for that state |
-| `/learn` | Education for people seeking help/clarity and people who want to take action |
+| `/learn` | How the site answers its four questions, plus impact counts and help resources |
 | `/get-involved` | Signup form for volunteers, advocates, media, and partners |
 | `/the-facts` | **The Facts** — neutral bill bullets with Congress.gov deep links |
-| `/about` | Policy positions, methodology, and 501(c)(3) public-charity status (EIN not published) |
+| `/about` | Policy positions and methodology |
+| `/organization` | Who we are, mission, and 501(c)(3) public-charity status (EIN not published) |
 | `/board` | Board of directors (enabled via `ENABLE_BOARD_PAGE`) |
 | `/disclaimer` | Legal disclaimer (entertainment purposes, public data sources, contact) |
 | `/partners` | Partner organizations |
