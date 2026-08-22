@@ -25,6 +25,7 @@ RUN set -e; \
         | tr -d '\n' \
         | base64 -d > public/images/american_flag.jpg; \
     fi
+ENV NODE_OPTIONS=--max-old-space-size=2048
 RUN npm run build
 
 FROM node:22-alpine AS runner
