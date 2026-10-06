@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
@@ -6,6 +8,7 @@ from app.security import (
     client_ip,
     rate_limit,
     reset_rate_limits_for_tests,
+    safe_service_error,
     safe_upstream_error,
     validate_bioguide_id,
     validate_congress,
@@ -93,6 +96,26 @@ def test_safe_upstream_error_hides_secrets():
     assert err.status_code == 502
     assert "api_key" not in err.detail.lower()
     assert "SECRET" not in err.detail
+
+
+def test_safe_upstream_error_redacts_secrets_from_logs(caplog):
+    caplog.set_level(logging.WARNING)
+    exc = Exception(
+        "Client error '404' for url 'https://api.congress.gov/v3/member/X?api_key=SECRET'"
+    )
+    safe_upstream_error(exc)
+    assert "SECRET" not in caplog.text
+    assert "api_key=SECRET" not in caplog.text
+
+
+def test_safe_service_error_redacts_secrets_from_logs(caplog):
+    caplog.set_level(logging.WARNING)
+    exc = Exception(
+        "Request failed: https://example.com/data?x-api-key=TOPSECRET&foo=bar"
+    )
+    safe_service_error(exc)
+    assert "TOPSECRET" not in caplog.text
+    assert "x-api-key=TOPSECRET" not in caplog.text
 
 
 def test_security_headers_middleware_sets_baseline():
