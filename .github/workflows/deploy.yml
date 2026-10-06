@@ -21,12 +21,12 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/dotnetrussell/operationchildshield
+  IMAGE_PREFIX: ghcr.io/squidsec/operationchildshield
 
 jobs:
   test:
     name: Tests
-    runs-on: [self-hosted, Linux, X64, squidsec]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -59,7 +59,7 @@ jobs:
   build-and-push:
     name: Build and push images
     needs: test
-    runs-on: [self-hosted, Linux, X64, squidsec]
+    runs-on: ubuntu-latest
     # Environment secrets (prod) are only available when the job declares this.
     environment: prod
     outputs:
@@ -107,13 +107,11 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}-frontend:${{ steps.meta.outputs.tag }}
             ${{ env.IMAGE_PREFIX }}-frontend:${{ steps.meta.outputs.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   deploy:
     name: Deploy to DigitalOcean
     needs: build-and-push
-    runs-on: [self-hosted, Linux, X64, squidsec]
+    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     # Must match the Environment name under Settings -> Environments (secrets live there).
     environment: prod
@@ -186,6 +184,8 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
         run: |
           set -euo pipefail
           PATH_ON_SERVER="${DEPLOY_PATH:-/opt/operationchildshield}"
@@ -193,6 +193,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${PATH_ON_SERVER}' && chmod +x scripts/server-pull-and-up.sh && \
+             GHCR_TOKEN='${GHCR_TOKEN}' \
+             GHCR_USER='${GHCR_USER}' \
              IMAGE_TAG='${IMAGE_TAG}' \
              NEXT_PUBLIC_API_URL='${SITE_URL}' \
              APP_DIR='${PATH_ON_SERVER}' \
