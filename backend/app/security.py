@@ -129,10 +129,22 @@ def validate_congress(congress: int | None, default: int) -> int:
     return value
 
 
+_CREDENTIAL_PARAM_RE = re.compile(
+    r"(?i)((?<![A-Za-z0-9_])"
+    r"(?:api[_-]?key|x-api-key|apikey|access[_-]?token|auth(?:orization)?|password|passwd|secret|signature|token)"
+    r"\s*=\s*)([^&\s\"']+)"
+)
+
+
+def _redact_credential_text(value: str) -> str:
+    """Mask credential-bearing query parameters and key=value pairs in text."""
+    return _CREDENTIAL_PARAM_RE.sub(r"\1[REDACTED]", value)
+
+
 def safe_upstream_error(exc: Exception, *, public_message: str = "Upstream data source error") -> HTTPException:
-    """Log full exception server-side; never return secrets/URLs to clients."""
-    logger.warning("Upstream error (sanitized for client): %s", exc, exc_info=False)
+    """Log a credential-redacted error server-side; never return secrets/URLs to clients."""
     text = str(exc)
+    logger.warning("Upstream error (sanitized for client): %s", _redact_credential_text(text), exc_info=False)
     # Defense-in-depth if a caller still interpolates exception text somewhere.
     if "api_key=" in text.lower() or "x-api-key" in text.lower():
         logger.error("Refusing to surface exception text that may contain credentials")
@@ -140,7 +152,7 @@ def safe_upstream_error(exc: Exception, *, public_message: str = "Upstream data 
 
 
 def safe_service_error(exc: Exception, *, public_message: str = "Service temporarily unavailable") -> HTTPException:
-    logger.warning("Service error (sanitized for client): %s", exc, exc_info=False)
+    logger.warning("Service error (sanitized for client): %s", _redact_credential_text(str(exc)), exc_info=False)
     return HTTPException(status_code=503, detail=public_message)
 
 
