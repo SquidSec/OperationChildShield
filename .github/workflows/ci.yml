@@ -13,7 +13,7 @@ jobs:
   backend:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Backend (pytest)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, squidsec]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -41,7 +41,7 @@ jobs:
   frontend:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Frontend (vitest)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, squidsec]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -78,7 +78,10 @@ jobs:
   security-scan:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Container (Trivy config)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, squidsec]
+    env:
+      TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
+      TRIVY_TIMEOUT: 15m
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
