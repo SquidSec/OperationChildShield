@@ -1,5 +1,5 @@
 import { SocialLinks } from "@/components/SocialLinks";
-import { ENABLE_BOARD_PAGE } from "@/lib/feature-flags";
+import { ENABLE_BOARD_PAGE, ENABLE_DONATE_PAGE } from "@/lib/feature-flags";
 
 export function Footer() {
   return (
@@ -26,6 +26,11 @@ export function Footer() {
         <a href="/get-involved" className="underline hover:opacity-100">
           Join Us
         </a>
+        {ENABLE_DONATE_PAGE && (
+          <a href="/donate" className="underline hover:opacity-100">
+            Donate
+          </a>
+        )}
         <a href="/learn" className="underline hover:opacity-100">
           How It Works
         </a>
@@ -64,10 +69,10 @@ export function Footer() {
         For entertainment purposes only. Data sourced from public records. Questions
         or disputes:{" "}
         <a
-          href="mailto:Contact@OperationChildShield.com"
+          href="mailto:Contact@OperationChildShield.org"
           className="underline hover:opacity-100"
         >
-          Contact@OperationChildShield.com
+          Contact@OperationChildShield.org
         </a>
         .
       </p>

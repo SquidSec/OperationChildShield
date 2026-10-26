@@ -39,15 +39,16 @@ Independent agentic recon + AI analysis of the production site (headers, surface
 | `/partners` | Partner organizations |
 | `/directory` | Alternate member listing |
 
-### Hidden pages (feature-flagged off)
+### Feature-flagged pages
 
-These routes return **404** until enabled in [`frontend/src/lib/feature-flags.ts`](frontend/src/lib/feature-flags.ts):
+Gated in [`frontend/src/lib/feature-flags.ts`](frontend/src/lib/feature-flags.ts); a disabled route renders a **404**.
 
 | Route | Flag | Description |
 |-------|------|-------------|
-| `/donate` | `ENABLE_DONATE_PAGE` | Donation UI with suggested amounts (no payment processor wired yet) |
+| `/board` | `ENABLE_BOARD_PAGE` | Board of directors (enabled) |
+| `/donate` | `ENABLE_DONATE_PAGE` | Donation page with the embedded Donorbox form (enabled) |
 
-Set `ENABLE_DONATE_PAGE` to `true`, add nav links in `Header.tsx` / `Footer.tsx` if desired, and rebuild. The board page is already enabled (`ENABLE_BOARD_PAGE = true`) with nav links in the header and footer.
+**Donorbox note:** `/donate` is the only route whose CSP allows donorbox.org and nonce-less injected styles (see `frontend/src/proxy.ts`). CSP is applied per document load, so internal links to `/donate` use a plain `<a>` in `Header.tsx` and `Footer.tsx`; client-side routing would keep the previous page's stricter CSP and block the widget. Keep those links as full page loads.
 
 ### Backend API
 
@@ -381,7 +382,7 @@ Build on the stable production foundation.
 
 - Member and vote data from the [Congress.gov API](https://api.congress.gov/)
 - Site provided for **entertainment purposes** — see [/disclaimer](https://operationchildshield.org/disclaimer)
-- Disputes or concerns: [Contact@OperationChildShield.com](mailto:Contact@OperationChildShield.com)
+- Disputes or concerns: [Contact@OperationChildShield.org](mailto:Contact@OperationChildShield.org)
 - Not affiliated with the U.S. Government
 - Always verify official records at [congress.gov](https://www.congress.gov/)
 

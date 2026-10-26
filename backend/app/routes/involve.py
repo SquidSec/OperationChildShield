@@ -115,7 +115,7 @@ async def submit_involve_signup(body: InvolveSignupRequest, request: Request):
             logger.error("Involve signup file at size cap (%s bytes)", _MAX_SIGNUP_FILE_BYTES)
             raise HTTPException(
                 status_code=503,
-                detail="Unable to save signup right now. Please email Contact@OperationChildShield.com.",
+                detail="Unable to save signup right now. Please email Contact@OperationChildShield.org.",
             )
         _ensure_private_file(path)
         with path.open("a", encoding="utf-8") as fh:
@@ -130,7 +130,7 @@ async def submit_involve_signup(body: InvolveSignupRequest, request: Request):
         logger.exception("Failed to persist involve signup")
         raise HTTPException(
             status_code=503,
-            detail="Unable to save signup right now. Please email Contact@OperationChildShield.com.",
+            detail="Unable to save signup right now. Please email Contact@OperationChildShield.org.",
         )
 
     logger.info(

@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ENABLE_BOARD_PAGE } from "@/lib/feature-flags";
+import { ENABLE_BOARD_PAGE, ENABLE_DONATE_PAGE } from "@/lib/feature-flags";
 
 /** Ordered for engagement: explore data first, then act, then org/legal. */
 const NAV_LINKS = [
@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: "/the-facts", label: "The Facts" },
   { href: "/bills", label: "The Bills" },
   { href: "/get-involved", label: "Join Us" },
+  ...(ENABLE_DONATE_PAGE ? [{ href: "/donate", label: "Donate" }] : []),
   { href: "/learn", label: "How It Works" },
   { href: "/about", label: "Our Policy" },
   { href: "/organization", label: "The Organization" },
@@ -17,6 +18,29 @@ const NAV_LINKS = [
   ...(ENABLE_BOARD_PAGE ? [{ href: "/board", label: "Leadership" }] : []),
   { href: "/disclaimer", label: "Disclaimer" },
 ] as const;
+
+const NAV_ITEM_CLASS =
+  "inline-flex h-10 w-[10.5rem] shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 px-2 text-center text-sm font-semibold leading-tight text-white no-underline backdrop-blur-sm transition-colors hover:border-white/40 hover:bg-white/20";
+
+/**
+ * /donate gets a per-route CSP (see proxy.ts) so the Donorbox widget can inject
+ * its styles. CSP headers only apply on a full document load, so that route must
+ * not be reached through client-side routing.
+ */
+function NavItem({ href, label }: { href: string; label: string }) {
+  if (href === "/donate") {
+    return (
+      <a href={href} className={NAV_ITEM_CLASS}>
+        {label}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={NAV_ITEM_CLASS}>
+      {label}
+    </Link>
+  );
+}
 
 export function Header() {
   return (
@@ -59,13 +83,7 @@ export function Header() {
           className="mt-5 sm:mt-6 flex flex-wrap justify-center items-center gap-2 sm:gap-3"
         >
           {NAV_LINKS.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              className="inline-flex h-10 w-[10.5rem] shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 px-2 text-center text-sm font-semibold leading-tight text-white no-underline backdrop-blur-sm transition-colors hover:border-white/40 hover:bg-white/20"
-            >
-              {label}
-            </Link>
+            <NavItem key={href} href={href} label={label} />
           ))}
         </nav>
       </div>

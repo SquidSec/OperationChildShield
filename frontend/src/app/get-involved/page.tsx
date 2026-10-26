@@ -30,10 +30,10 @@ export default function GetInvolvedPage() {
       <p className="mt-2 text-sm text-muted">
         Prefer email?{" "}
         <a
-          href="mailto:Contact@OperationChildShield.com"
+          href="mailto:Contact@OperationChildShield.org"
           className="text-red font-semibold hover:underline"
         >
-          Contact@OperationChildShield.com
+          Contact@OperationChildShield.org
         </a>
       </p>
 

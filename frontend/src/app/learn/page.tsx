@@ -90,10 +90,10 @@ export default function LearnPage() {
             <strong className="text-foreground">Questions or corrections:</strong>{" "}
             email{" "}
             <a
-              href="mailto:Contact@OperationChildShield.com"
+              href="mailto:Contact@OperationChildShield.org"
               className="text-red font-semibold hover:underline"
             >
-              Contact@OperationChildShield.com
+              Contact@OperationChildShield.org
             </a>
             .
           </li>

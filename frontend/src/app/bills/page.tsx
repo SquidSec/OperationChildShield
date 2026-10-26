@@ -163,10 +163,10 @@ export default async function BillsPage() {
         </Link>{" "}
         or email{" "}
         <a
-          href="mailto:Contact@OperationChildShield.com"
+          href="mailto:Contact@OperationChildShield.org"
           className="text-blue font-medium hover:underline"
         >
-          Contact@OperationChildShield.com
+          Contact@OperationChildShield.org
         </a>{" "}
         with concerns.
       </p>

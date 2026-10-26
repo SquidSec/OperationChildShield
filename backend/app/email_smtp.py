@@ -139,7 +139,7 @@ def auto_reply_involve_signup(record: dict[str, Any]) -> bool:
         f"Hi {name},\n\n"
         "Thank you for signing up with Operation Child Shield. We received your "
         "message and will follow up when there is a good fit for your interest.\n\n"
-        "If you need to reach us sooner, email Contact@OperationChildShield.com.\n\n"
+        "If you need to reach us sooner, email Contact@OperationChildShield.org.\n\n"
         "— Operation Child Shield\n"
         "Protect | Educate | Mobilize\n"
         "https://operationchildshield.org\n"

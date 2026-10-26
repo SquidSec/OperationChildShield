@@ -76,10 +76,10 @@ export default function OrganizationPage() {
           Join us →
         </Link>
         <a
-          href="mailto:Contact@OperationChildShield.com"
+          href="mailto:Contact@OperationChildShield.org"
           className="rounded-[10px] border border-card-border bg-surface px-5 py-4 font-bold text-blue no-underline hover:bg-surface-muted"
         >
-          Contact@OperationChildShield.com
+          Contact@OperationChildShield.org
         </a>
       </div>
     </div>
