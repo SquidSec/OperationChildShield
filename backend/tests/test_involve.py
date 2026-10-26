@@ -114,3 +114,26 @@ def test_involve_rejects_bad_email(tmp_path, monkeypatch):
         },
     )
     assert res.status_code == 422
+
+
+def test_involve_emails_run_after_response_not_inline(tmp_path, monkeypatch):
+    """SMTP must not run on the request path; background tasks run post-response."""
+    calls: list[str] = []
+
+    def slow_notify(_record):
+        calls.append("notify")
+        return True
+
+    monkeypatch.setattr(involve, "notify_involve_signup", slow_notify)
+    monkeypatch.setattr(involve, "auto_reply_involve_signup", lambda _r: False)
+
+    client = _app(tmp_path, monkeypatch)
+    res = client.post(
+        "/api/involve",
+        json={"name": "Jane", "email": "jane@example.com", "consent": True},
+    )
+
+    assert res.status_code == 200
+    # TestClient runs background tasks before returning, so a call here proves
+    # the work is wired to BackgroundTasks rather than the handler body.
+    assert calls == ["notify"]

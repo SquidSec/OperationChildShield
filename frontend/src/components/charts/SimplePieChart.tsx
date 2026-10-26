@@ -52,12 +52,17 @@ export function SimplePieChart({
     );
   }
 
-  let cursor = 0;
-  const slices = segments.map((segment) => {
-    const sweep = (segment.value / total) * 360;
-    const start = cursor;
-    const end = cursor + sweep;
-    cursor = end;
+  // Accumulate start angles without mutating a shared cursor during render.
+  const bounds = segments.reduce<number[]>((acc, segment, index) => {
+    const previous = index === 0 ? 0 : acc[index - 1];
+    acc.push(previous + (segment.value / total) * 360);
+    return acc;
+  }, []);
+
+  const slices = segments.map((segment, index) => {
+    const end = bounds[index];
+    const start = index === 0 ? 0 : bounds[index - 1];
+    const sweep = end - start;
     return {
       ...segment,
       path:

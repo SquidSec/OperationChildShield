@@ -48,31 +48,67 @@ def test_validate_congress_bounds():
         assert e.status_code == 400
 
 
-def test_client_ip_prefers_x_real_ip_and_rightmost_xff():
+def _ip_app(peer: str = "10.0.0.5") -> TestClient:
     app = FastAPI()
 
     @app.get("/ip")
     def ip(request: Request):
         return {"ip": client_ip(request)}
 
-    client = TestClient(app)
+    return TestClient(app, client=(peer, 50000))
 
-    # X-Real-IP wins
-    r = client.get(
-        "/ip",
-        headers={
-            "X-Real-IP": "198.51.100.10",
-            "X-Forwarded-For": "203.0.113.1, 198.51.100.10",
-        },
-    )
-    assert r.json()["ip"] == "198.51.100.10"
 
-    # Without X-Real-IP, rightmost XFF is used (not leftmost spoof)
-    r = client.get(
-        "/ip",
-        headers={"X-Forwarded-For": "203.0.113.50, 198.51.100.20"},
-    )
-    assert r.json()["ip"] == "198.51.100.20"
+def test_client_ip_trusts_forwarded_headers_from_proxy():
+    from app.security import settings
+
+    original = settings.trusted_proxy_cidrs
+    try:
+        # Same default network list as production use: private ranges trusted.
+        settings.trusted_proxy_cidrs = "127.0.0.1/32,10.0.0.0/8"
+        client = _ip_app("10.0.0.5")
+
+        # X-Real-IP wins
+        r = client.get(
+            "/ip",
+            headers={
+                "X-Real-IP": "198.51.100.10",
+                "X-Forwarded-For": "203.0.113.1, 198.51.100.10",
+            },
+        )
+        assert r.json()["ip"] == "198.51.100.10"
+
+        # Without X-Real-IP, rightmost XFF is used (not leftmost spoof)
+        r = client.get(
+            "/ip",
+            headers={"X-Forwarded-For": "203.0.113.50, 198.51.100.20"},
+        )
+        assert r.json()["ip"] == "198.51.100.20"
+
+        # Junk header values fall back to the peer
+        r = client.get("/ip", headers={"X-Real-IP": "not-an-ip"})
+        assert r.json()["ip"] == "10.0.0.5"
+    finally:
+        settings.trusted_proxy_cidrs = original
+
+
+def test_client_ip_ignores_forwarded_headers_from_untrusted_peer():
+    from app.security import settings
+
+    original = settings.trusted_proxy_cidrs
+    try:
+        settings.trusted_proxy_cidrs = "127.0.0.1/32,10.0.0.0/8"
+        # Public peer address: not a proxy, so headers must be ignored.
+        client = _ip_app("198.51.100.99")
+        r = client.get(
+            "/ip",
+            headers={
+                "X-Real-IP": "198.51.100.10",
+                "X-Forwarded-For": "203.0.113.1",
+            },
+        )
+        assert r.json()["ip"] == "198.51.100.99"
+    finally:
+        settings.trusted_proxy_cidrs = original
 
 
 def test_rate_limit_trips():

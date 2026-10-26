@@ -7,7 +7,7 @@ Security fixes are applied to the `main` branch and production deployment at
 
 ## Reporting a vulnerability
 
-Please email **Contact@OperationChildShield.com** with:
+Please email **Contact@OperationChildShield.org** with:
 
 - A clear description of the issue and impact
 - Steps to reproduce (or a proof-of-concept that does not harm production)

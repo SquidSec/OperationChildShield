@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 import time
 from collections import defaultdict
 from threading import Lock
+
+from app.config import settings
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -55,35 +58,49 @@ _rate_hits: dict[str, dict[str, list[float]]] = defaultdict(dict)
 _MAX_IPS_PER_BUCKET = 10_000
 
 
-def client_ip(request: Request) -> str:
-    """Resolve client IP behind a trusted reverse proxy (Caddy).
+def _parse_ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """Parse a single IP, tolerating IPv6 zone ids and bracketed forms."""
+    candidate = (value or "").strip().strip("[]")
+    if not candidate or len(candidate) > 64 or " " in candidate:
+        return None
+    candidate = candidate.split("%")[0]  # strip IPv6 zone id
+    try:
+        return ipaddress.ip_address(candidate)
+    except ValueError:
+        return None
 
-    Prefer X-Real-IP (set/overwritten by Caddy). For X-Forwarded-For, use the
-    *rightmost* hop — Caddy appends the true peer, so leftmost values are
-    client-spoofable and must not be used for rate limiting.
+
+def _is_trusted_proxy(value: str) -> bool:
+    addr = _parse_ip(value)
+    if addr is None:
+        return False
+    return any(addr in network for network in settings.trusted_proxy_networks)
+
+
+def client_ip(request: Request) -> str:
+    """Resolve the client IP, trusting forwarding headers only from a proxy.
+
+    Forwarding headers are client-controlled unless a trusted reverse proxy
+    overwrites them, so they are ignored when the peer is not a trusted proxy.
+    Caddy overwrites X-Forwarded-For (dropping client-supplied hops); the
+    *rightmost* entry is therefore the peer Caddy saw.
     """
+    peer = request.client.host if request.client and request.client.host else ""
+
+    if not _is_trusted_proxy(peer):
+        return peer or "unknown"
+
     real_ip = (request.headers.get("x-real-ip") or "").strip()
-    if real_ip and _looks_like_ip(real_ip):
-        return real_ip.split("%")[0]  # strip IPv6 zone id if present
+    if real_ip and _parse_ip(real_ip):
+        return str(_parse_ip(real_ip))
 
     forwarded = (request.headers.get("x-forwarded-for") or "").strip()
     if forwarded:
         parts = [p.strip() for p in forwarded.split(",") if p.strip()]
-        if parts:
-            candidate = parts[-1]
-            if _looks_like_ip(candidate):
-                return candidate.split("%")[0]
+        if parts and _parse_ip(parts[-1]):
+            return str(_parse_ip(parts[-1]))
 
-    if request.client and request.client.host:
-        return request.client.host
-    return "unknown"
-
-
-def _looks_like_ip(value: str) -> bool:
-    # Lightweight check — not full validation; enough to reject obvious junk.
-    if not value or len(value) > 64 or " " in value:
-        return False
-    return True
+    return peer or "unknown"
 
 
 def rate_limit(

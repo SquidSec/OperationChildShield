@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     "Legal disclaimer for Operation Child Shield: entertainment purposes, public data sources, and contact information.",
 };
 
-const CONTACT_EMAIL = "Contact@OperationChildShield.com";
+const CONTACT_EMAIL = "Contact@OperationChildShield.org";
 
 export default function DisclaimerPage() {
   return (

@@ -30,8 +30,9 @@ async def lifespan(app: FastAPI):
     try:
         await log_bill_verification(app.state.congress_client)
     except Exception:
-        logger.exception("Tracked bill verification failed at startup")
-        raise
+        # Non-fatal: verification needs a live Congress.gov and an API key.
+        # Failing closed here would turn an upstream hiccup into an outage.
+        logger.exception("Tracked bill verification failed at startup (non-fatal)")
     yield
     await app.state.congress_client.close()
 
@@ -52,7 +53,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
+    # No cookies or auth headers are used; keeping credentials off avoids
+    # granting cross-origin authenticated access if cookies are added later.
+    allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Accept"],
 )

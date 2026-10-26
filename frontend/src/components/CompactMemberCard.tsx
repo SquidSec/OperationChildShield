@@ -30,8 +30,10 @@ export function CompactMemberCard({ member }: CompactMemberCardProps) {
   const cardRef = useRef<HTMLAnchorElement>(null);
   const [report, setReport] = useState<ReportCard | null>(null);
   const [visible, setVisible] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  // Derived instead of set synchronously in the effect below (which would
+  // trigger a cascading render on every visibility change).
+  const loading = visible && !report && !loadFailed;
 
   const displayName = formatDisplayName(member.name);
   const subtitle = formatMemberSubtitle(member);
@@ -73,8 +75,6 @@ export function CompactMemberCard({ member }: CompactMemberCardProps) {
     if (!visible) return;
 
     let cancelled = false;
-    setLoading(true);
-    setLoadFailed(false);
 
     reportCardQueue
       .enqueue(async () => {
@@ -92,9 +92,6 @@ export function CompactMemberCard({ member }: CompactMemberCardProps) {
       })
       .catch(() => {
         if (!cancelled) setLoadFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
       });
 
     return () => {

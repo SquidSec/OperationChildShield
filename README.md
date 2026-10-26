@@ -39,15 +39,16 @@ Independent agentic recon + AI analysis of the production site (headers, surface
 | `/partners` | Partner organizations |
 | `/directory` | Alternate member listing |
 
-### Hidden pages (feature-flagged off)
+### Feature-flagged pages
 
-These routes return **404** until enabled in [`frontend/src/lib/feature-flags.ts`](frontend/src/lib/feature-flags.ts):
+Gated in [`frontend/src/lib/feature-flags.ts`](frontend/src/lib/feature-flags.ts); a disabled route renders a **404**.
 
 | Route | Flag | Description |
 |-------|------|-------------|
-| `/donate` | `ENABLE_DONATE_PAGE` | Donation UI with suggested amounts (no payment processor wired yet) |
+| `/board` | `ENABLE_BOARD_PAGE` | Board of directors (enabled) |
+| `/donate` | `ENABLE_DONATE_PAGE` | Donation page with the embedded Donorbox form (enabled) |
 
-Set `ENABLE_DONATE_PAGE` to `true`, add nav links in `Header.tsx` / `Footer.tsx` if desired, and rebuild. The board page is already enabled (`ENABLE_BOARD_PAGE = true`) with nav links in the header and footer.
+**Donorbox note:** `/donate` is the only route whose CSP allows donorbox.org and nonce-less injected styles (see `frontend/src/proxy.ts`). CSP is applied per document load, so internal links to `/donate` use a plain `<a>` in `Header.tsx` and `Footer.tsx`; client-side routing would keep the previous page's stricter CSP and block the widget. Keep those links as full page loads.
 
 ### Backend API
 
@@ -214,7 +215,7 @@ OperationChildShield/
 │   │   ├── services.py           # Report cards, directory, API serialization
 │   │   ├── metrics.py            # Bill-level roll-call aggregation (no member rankings)
 │   │   └── routes/               # FastAPI routers
-│   └── tests/                    # 97 pytest unit tests (no live API calls)
+│   └── tests/                    # 128 pytest unit tests (no live API calls)
 ├── frontend/
 │   └── src/
 │       ├── app/                  # Next.js App Router pages
@@ -242,7 +243,7 @@ Deployment scripts and production configs (`deploy-prod.sh`, `docker-compose.pro
 
 ## Testing
 
-**177 unit tests** total — **122 backend** (pytest) + **55 frontend** (Vitest). CI runs both suites on every push and pull request to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+**183 unit tests** total — **128 backend** (pytest) + **55 frontend** (Vitest). CI runs both suites on every push and pull request to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 ```bash
 # All tests (recommended — uses backend venv via scripts/test.sh)
@@ -321,10 +322,13 @@ Before deploying:
 ## Operational notes
 
 - **First request after cache expiry** can take 30–60+ seconds while report cards or metrics are built; stale cache is served during background refresh when available.
-- **Backend startup** verifies all 30 tracked bills against Congress.gov; mismatches prevent the server from starting.
+- **Backend startup** verifies all 30 tracked bills against Congress.gov and logs any mismatch. Verification failures are non-fatal, so an upstream outage does not block boot.
 - **Senate members** appear in the directory but House roll-call votes drive per-member records; Senate floor votes are not available per-member via Congress.gov today.
 - **Metrics page** aggregates bill-level roll-call statistics only — no member leaderboards or grade distributions.
-- **Board page** is live (`ENABLE_BOARD_PAGE = true`). **Donate page** remains disabled until `ENABLE_DONATE_PAGE` is enabled and a payment processor is integrated.
+- **Board page** and **Donate page** are live (`ENABLE_BOARD_PAGE`, `ENABLE_DONATE_PAGE = true`).
+- **Join Us email** runs as a background task after the response, so a slow SMTP server cannot stall other requests. Auto-replies are throttled per address (`AUTO_REPLY_PER_ADDRESS_HOURS`) and globally (`AUTO_REPLY_MAX_PER_HOUR`).
+- **Client IP** comes from `X-Real-IP` / `X-Forwarded-For` only when the peer is in `TRUSTED_PROXY_CIDRS`; rate limits key on the true peer otherwise.
+- **Analytics** store path, referrer, and user agent for `ANALYTICS_RETENTION_DAYS` (default 90) before being pruned. Only aggregate counts are exposed.
 
 ---
 
@@ -347,11 +351,9 @@ Focus on stability and launch readiness before deeper work.
    - Refine bios, images, and content.
    - Continue QA and accessibility review.
 
-2. **Enable and implement donation page**
-   - Enable feature flag (`ENABLE_DONATE_PAGE`).
-   - Integrate Stripe (primary) with PayPal fallback: forms with suggested/recurring amounts, fee coverage, impact messaging.
-   - Add receipt/thank-you flows and basic donor logging.
-   - Test thoroughly (sandbox first).
+2. **Donation page** (done — Donorbox embed live behind `ENABLE_DONATE_PAGE`)
+   - Embedded Donorbox campaign `operation-child-shield` handles amounts, recurring gifts, and receipts.
+   - `/donate` carries a route-scoped CSP allowing donorbox.org; other routes keep the strict nonce policy.
 
 3. **Migrate to production server environment** (do this immediately after or alongside #1/#2)
    - **Prep**: Copy and customize `docker-compose.prod.example.yml`, `Caddyfile.example`, and `scripts/deploy-prod.example.sh`. Set production env vars (CORS, `NEXT_PUBLIC_SITE_URL`, API keys). Use secrets management — never commit keys. Run `make verify-bills` and `make test`.
@@ -381,7 +383,7 @@ Build on the stable production foundation.
 
 - Member and vote data from the [Congress.gov API](https://api.congress.gov/)
 - Site provided for **entertainment purposes** — see [/disclaimer](https://operationchildshield.org/disclaimer)
-- Disputes or concerns: [Contact@OperationChildShield.com](mailto:Contact@OperationChildShield.com)
+- Disputes or concerns: [Contact@OperationChildShield.org](mailto:Contact@OperationChildShield.org)
 - Not affiliated with the U.S. Government
 - Always verify official records at [congress.gov](https://www.congress.gov/)
 

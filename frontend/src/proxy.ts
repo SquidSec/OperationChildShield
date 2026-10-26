@@ -31,21 +31,34 @@ export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const isDev = process.env.NODE_ENV === "development";
 
+  // Donorbox's custom element injects its own <style> tags into shadow DOM and a
+  // stylesheet from rsms.me. Injected styles cannot carry our nonce, so that route
+  // drops the style nonce in favor of 'unsafe-inline'; every other route keeps it.
+  const isDonate = request.nextUrl.pathname.startsWith("/donate");
+  const styleSrc = isDonate
+    ? "style-src 'self' 'unsafe-inline' https://rsms.me https://donorbox.org"
+    : `style-src 'self' 'nonce-${nonce}'`;
+
   const csp = [
     "default-src 'self'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    // Local assets + congress.gov member photos
-    "img-src 'self' data: blob: https://www.congress.gov",
-    "font-src 'self' data:",
-    // Next applies nonces to its style tags; React style attributes need style-src-attr
-    `style-src 'self' 'nonce-${nonce}'`,
+    // Local assets + congress.gov member photos; Donorbox renders its own images
+    `img-src 'self' data: blob: https://www.congress.gov${isDonate ? " https://donorbox.org" : ""}`,
+    `font-src 'self' data:${isDonate ? " https://rsms.me" : ""}`,
+    styleSrc,
     "style-src-attr 'unsafe-inline'",
     // Nonce + strict-dynamic: no 'unsafe-inline'. Dev-only eval for React refresh.
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
-    connectSrcDirective(isDev),
+    isDonate
+      ? `${connectSrcDirective(isDev).replace("connect-src ", "connect-src https://donorbox.org ")}`
+      : connectSrcDirective(isDev),
+    // Donorbox opens Stripe / PayPal frames during checkout
+    ...(isDonate
+      ? ["frame-src https://donorbox.org https://js.stripe.com https://www.paypal.com"]
+      : []),
     "upgrade-insecure-requests",
   ]
     .join("; ")

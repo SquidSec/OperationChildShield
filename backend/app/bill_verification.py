@@ -92,6 +92,10 @@ async def log_bill_verification(client: CongressClient) -> None:
             )
 
     if failures:
-        raise RuntimeError(
-            f"{len(failures)} tracked bill(s) failed Congress.gov verification"
+        # Log loudly but keep serving: a Congress.gov outage or upstream title
+        # edit must not take the whole site down.
+        logger.error(
+            "%d tracked bill(s) failed Congress.gov verification: %s",
+            len(failures),
+            ", ".join(f"{r['congress']} {r['bill_type']} {r['number']}" for r in failures),
         )

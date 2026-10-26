@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 
 from fastapi import APIRouter, HTTPException, Request
@@ -49,7 +50,7 @@ async def track_page_view(body: PageViewEvent, request: Request):
     if action and action != "page_view":
         if action not in CLIENT_ACTIONS:
             raise HTTPException(status_code=400, detail="Invalid action")
-        record_action(action, path=path)
+        await asyncio.to_thread(record_action, action, path=path)
         return {"ok": True, "action": action}
 
     lower = path.lower()
@@ -61,7 +62,10 @@ async def track_page_view(body: PageViewEvent, request: Request):
         return {"ok": True, "skipped": True}
 
     ua = request.headers.get("user-agent", "")
-    record_page_view(path, referrer=body.referrer or None, user_agent=ua)
+    # sqlite3 is blocking; keep it off the event loop.
+    await asyncio.to_thread(
+        record_page_view, path, referrer=body.referrer or None, user_agent=ua
+    )
     return {"ok": True}
 
 
@@ -75,4 +79,4 @@ async def site_impact(request: Request):
         window_seconds=60.0,
         detail="Too many impact requests",
     )
-    return get_impact_counts()
+    return await asyncio.to_thread(get_impact_counts)

@@ -6,7 +6,7 @@ import logging
 import os
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.config import settings
@@ -94,7 +94,33 @@ def ensure_initialized() -> None:
         init_analytics_db()
 
 
+def _retention_cutoff() -> str | None:
+    days = settings.analytics_retention_days
+    if days <= 0:
+        return None
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+
+def _prune_expired(conn: sqlite3.Connection) -> None:
+    """Drop rows older than the retention window (raw UA/referrer are personal data)."""
+    cutoff = _retention_cutoff()
+    if cutoff is None:
+        return
+    deleted = conn.execute("DELETE FROM page_views WHERE viewed_at < ?", (cutoff,)).rowcount
+    deleted_actions = conn.execute(
+        "DELETE FROM action_events WHERE created_at < ?", (cutoff,)
+    ).rowcount
+    if deleted or deleted_actions:
+        logger.info(
+            "Pruned analytics rows past retention: page_views=%s action_events=%s",
+            deleted,
+            deleted_actions,
+        )
+    conn.commit()
+
+
 def _maybe_prune(conn: sqlite3.Connection) -> None:
+    _prune_expired(conn)
     count = conn.execute("SELECT COUNT(*) FROM page_views").fetchone()[0]
     if count <= _MAX_PAGE_VIEWS:
         return
@@ -150,6 +176,7 @@ def record_page_view(
 
 
 def _maybe_prune_actions(conn: sqlite3.Connection) -> None:
+    _prune_expired(conn)
     count = conn.execute("SELECT COUNT(*) FROM action_events").fetchone()[0]
     if count <= _MAX_ACTION_EVENTS:
         return

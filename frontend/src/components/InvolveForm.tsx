@@ -56,10 +56,10 @@ export function InvolveForm() {
           We received your signup. Someone from Operation Child Shield will follow
           up when there is a good fit for your interest. You can also reach us at{" "}
           <a
-            href="mailto:Contact@OperationChildShield.com"
+            href="mailto:Contact@OperationChildShield.org"
             className="text-red font-semibold hover:underline"
           >
-            Contact@OperationChildShield.com
+            Contact@OperationChildShield.org
           </a>
           .
         </p>

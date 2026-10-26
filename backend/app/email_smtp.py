@@ -6,6 +6,8 @@ import logging
 import re
 import smtplib
 import ssl
+import threading
+import time
 from email.message import EmailMessage
 from typing import Any
 
@@ -15,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 # CR/LF and other C0 controls (except TAB) must never enter headers or untrusted body lines.
 _UNSAFE_EMAIL_CHARS = re.compile(r"[\r\n\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+")
+
+# Keep SMTP failures short: these run in a background thread, and a long stall
+# only delays other queued mail.
+SMTP_TIMEOUT_SECONDS = 10
 
 
 def sanitize_email_header(value: str, *, max_length: int = 200) -> str:
@@ -72,7 +78,7 @@ def send_email(
 
     context = ssl.create_default_context()
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=SMTP_TIMEOUT_SECONDS) as smtp:
             smtp.ehlo()
             smtp.starttls(context=context)
             smtp.ehlo()
@@ -125,6 +131,54 @@ def notify_involve_signup(record: dict[str, Any]) -> bool:
     return True
 
 
+_auto_reply_lock = threading.Lock()
+# address -> last time we auto-replied
+_auto_reply_by_address: dict[str, float] = {}
+# send timestamps inside the global rolling window
+_auto_reply_global: list[float] = []
+_AUTO_REPLY_WINDOW_SECONDS = 3600.0
+
+
+def _reserve_auto_reply(email: str) -> bool:
+    """Claim an auto-reply slot, or return False when throttled.
+
+    Signup is unauthenticated, so without this the endpoint can be pointed at
+    any address to generate mail from our domain.
+    """
+    now = time.time()
+    window = max(settings.auto_reply_per_address_hours, 0.0) * 3600.0
+    with _auto_reply_lock:
+        last = _auto_reply_by_address.get(email)
+        if window > 0 and last is not None and now - last < window:
+            return False
+
+        _auto_reply_global[:] = [
+            t for t in _auto_reply_global if now - t < _AUTO_REPLY_WINDOW_SECONDS
+        ]
+        if len(_auto_reply_global) >= max(settings.auto_reply_max_per_hour, 0):
+            return False
+
+        _auto_reply_by_address[email] = now
+        _auto_reply_global.append(now)
+
+        # Bound memory: drop entries whose window has expired.
+        if len(_auto_reply_by_address) > 10_000:
+            stale = [
+                addr
+                for addr, sent in _auto_reply_by_address.items()
+                if window <= 0 or now - sent >= window
+            ]
+            for addr in stale:
+                _auto_reply_by_address.pop(addr, None)
+        return True
+
+
+def reset_auto_reply_throttle_for_tests() -> None:
+    with _auto_reply_lock:
+        _auto_reply_by_address.clear()
+        _auto_reply_global.clear()
+
+
 def auto_reply_involve_signup(record: dict[str, Any]) -> bool:
     """Optional confirmation email to the person who signed up."""
     if not settings.smtp_configured or not settings.involve_send_auto_reply:
@@ -134,12 +188,16 @@ def auto_reply_involve_signup(record: dict[str, Any]) -> bool:
     if not email or "@" not in email:
         return False
 
+    if not _reserve_auto_reply(email):
+        logger.info("Auto-reply throttled for repeat recipient (%s)", email.split("@")[-1])
+        return False
+
     name = sanitize_email_header(str(record.get("name") or "").strip() or "friend", max_length=120)
     body = (
         f"Hi {name},\n\n"
         "Thank you for signing up with Operation Child Shield. We received your "
         "message and will follow up when there is a good fit for your interest.\n\n"
-        "If you need to reach us sooner, email Contact@OperationChildShield.com.\n\n"
+        "If you need to reach us sooner, email Contact@OperationChildShield.org.\n\n"
         "— Operation Child Shield\n"
         "Protect | Educate | Mobilize\n"
         "https://operationchildshield.org\n"

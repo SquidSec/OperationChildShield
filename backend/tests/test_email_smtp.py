@@ -69,3 +69,37 @@ def test_auto_reply_returns_false_on_send_failure(monkeypatch):
 
     monkeypatch.setattr("app.email_smtp.send_email", boom)
     assert auto_reply_involve_signup({"email": "a@b.com", "name": "A"}) is False
+
+
+def test_auto_reply_is_throttled_per_address(monkeypatch):
+    """Repeated signups for one address must not keep generating mail."""
+    sent: list[dict] = []
+    _enable_smtp(monkeypatch)
+    monkeypatch.setattr("app.email_smtp.send_email", lambda **kw: sent.append(kw))
+    from app.email_smtp import reset_auto_reply_throttle_for_tests
+
+    reset_auto_reply_throttle_for_tests()
+
+    record = {"email": "victim@example.com", "name": "A"}
+    assert auto_reply_involve_signup(record) is True
+    assert auto_reply_involve_signup(record) is False
+    assert auto_reply_involve_signup(record) is False
+    assert len(sent) == 1
+
+
+def test_auto_reply_is_capped_globally(monkeypatch):
+    """A rotating-address attack hits the global hourly cap."""
+    _enable_smtp(monkeypatch)
+    import app.email_smtp as email_smtp
+
+    monkeypatch.setattr(email_smtp.settings, "auto_reply_max_per_hour", 3)
+    monkeypatch.setattr(email_smtp, "send_email", lambda **kw: None)
+    from app.email_smtp import reset_auto_reply_throttle_for_tests
+
+    reset_auto_reply_throttle_for_tests()
+
+    results = [
+        auto_reply_involve_signup({"email": f"user{i}@example.com", "name": "A"})
+        for i in range(6)
+    ]
+    assert results == [True, True, True, False, False, False]
