@@ -1,3 +1,5 @@
+import ipaddress
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,7 +25,19 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = ""
     involve_notify_to: str = ""
+    # Auto-replies are throttled per recipient and globally (see email_smtp) so an
+    # unauthenticated signup cannot use the server to mailbomb arbitrary addresses.
     involve_send_auto_reply: bool = True
+    # Max auto-replies to one address per window, and the global hourly cap.
+    auto_reply_per_address_hours: float = 24.0
+    auto_reply_max_per_hour: int = 60
+
+    # Reverse proxy whose forwarded-IP headers we trust. Loopback + private
+    # ranges by default; set to the Caddy address in production.
+    trusted_proxy_cidrs: str = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+    # Age of raw analytics rows (page views / actions) before pruning.
+    analytics_retention_days: int = 90
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -32,6 +46,19 @@ class Settings(BaseSettings):
     @property
     def smtp_configured(self) -> bool:
         return bool(self.smtp_host and self.smtp_user and self.smtp_password)
+
+    @property
+    def trusted_proxy_networks(self) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+        networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        for raw in self.trusted_proxy_cidrs.split(","):
+            cidr = raw.strip()
+            if not cidr:
+                continue
+            try:
+                networks.append(ipaddress.ip_network(cidr, strict=False))
+            except ValueError:
+                continue
+        return networks
 
 
 settings = Settings()

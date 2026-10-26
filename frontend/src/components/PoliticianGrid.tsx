@@ -45,11 +45,16 @@ export function PoliticianGrid({
   const [loadError, setLoadError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // Reset accumulated results when the server sends a new page of props.
+  // Adjusting state during render is the documented alternative to an effect
+  // and avoids the extra render pass an effect would add.
+  const [syncedMembers, setSyncedMembers] = useState(initialMembers);
+  if (initialMembers !== syncedMembers) {
+    setSyncedMembers(initialMembers);
     setMembers(initialMembers);
     setTotal(initialTotal);
     setLoadError(null);
-  }, [initialMembers, initialTotal]);
+  }
 
   const hasMore = infiniteScroll && members.length < total;
 

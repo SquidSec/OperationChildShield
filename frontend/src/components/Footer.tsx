@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SocialLinks } from "@/components/SocialLinks";
 import { ENABLE_BOARD_PAGE, ENABLE_DONATE_PAGE } from "@/lib/feature-flags";
 
@@ -11,9 +12,9 @@ export function Footer() {
         Data from Congress.gov Public API • Transparency for We the People
       </p>
       <p className="mt-3 mb-0 text-sm opacity-85 flex flex-wrap justify-center gap-x-4 gap-y-1">
-        <a href="/" className="underline hover:opacity-100">
+        <Link href="/" className="underline hover:opacity-100">
           Find Lawmakers
-        </a>
+        </Link>
         <a href="/metrics" className="underline hover:opacity-100">
           See the Numbers
         </a>

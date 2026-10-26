@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import {
   applyTheme,
-  getPreferredTheme,
+  getAppliedTheme,
+  subscribeToTheme,
   THEME_STORAGE_KEY,
   type Theme,
 } from "@/lib/theme";
@@ -43,18 +44,27 @@ function MoonIcon() {
   );
 }
 
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("light");
-  const [mounted, setMounted] = useState(false);
+const subscribeNoop = () => () => {};
 
-  useEffect(() => {
-    setTheme(getPreferredTheme());
-    setMounted(true);
-  }, []);
+export function ThemeToggle() {
+  // <html class="dark"> is already set by the inline init script before
+  // hydration, so read the applied theme instead of copying it into state.
+  // The server snapshot is "light" to keep the first paint consistent.
+  const theme = useSyncExternalStore(
+    subscribeToTheme,
+    getAppliedTheme,
+    () => "light" as Theme
+  );
+
+  // false during SSR/first client render, true afterwards.
+  const mounted = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false
+  );
 
   function toggleTheme() {
     const next: Theme = theme === "dark" ? "light" : "dark";
-    setTheme(next);
     applyTheme(next);
     try {
       localStorage.setItem(THEME_STORAGE_KEY, next);

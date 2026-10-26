@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.analytics_store import record_action
@@ -66,8 +66,31 @@ def _ensure_private_file(path: Path) -> None:
             logger.warning("Could not chmod signup file to 0600")
 
 
+def _send_signup_emails(record: dict[str, object]) -> None:
+    """Send ops notification (and opt-in auto-reply) off the event loop.
+
+    Runs as a Starlette background task in the threadpool: smtplib is blocking,
+    and a slow or unresponsive mail server must not stall other requests.
+    """
+    try:
+        if notify_involve_signup(record):
+            logger.info("Involve signup emailed to notify inbox")
+    except Exception:
+        logger.exception("Failed to email involve notify")
+
+    try:
+        if auto_reply_involve_signup(record):
+            logger.info("Involve auto-reply sent to submitter")
+    except Exception:
+        logger.exception("Failed to send involve auto-reply")
+
+
 @router.post("/involve")
-async def submit_involve_signup(body: InvolveSignupRequest, request: Request):
+async def submit_involve_signup(
+    body: InvolveSignupRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
     # Silent success for honeypot traps so bots don't learn the field.
     if body.website:
         logger.info("Involve honeypot triggered from %s", client_ip(request))
@@ -144,19 +167,10 @@ async def submit_involve_signup(body: InvolveSignupRequest, request: Request):
     except Exception:
         logger.exception("Failed to record involve signup action")
 
-    # Email ops (+ optional auto-reply). Persistence already succeeded; do not fail
-    # the HTTP response if SMTP is down — signups stay in involve_signups.jsonl.
-    try:
-        if notify_involve_signup(record):
-            logger.info("Involve signup emailed to notify inbox")
-    except Exception:
-        logger.exception("Failed to email involve notify")
-
-    try:
-        if auto_reply_involve_signup(record):
-            logger.info("Involve auto-reply sent to submitter")
-    except Exception:
-        logger.exception("Failed to send involve auto-reply")
+    # Persistence already succeeded; email runs after the response so a slow mail
+    # server cannot block the event loop. Signups stay in involve_signups.jsonl
+    # if SMTP fails.
+    background_tasks.add_task(_send_signup_emails, record)
 
     return {
         "ok": True,

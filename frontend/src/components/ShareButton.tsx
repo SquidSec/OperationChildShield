@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trackAction } from "@/lib/api";
 import { buildSharePayload, type ShareReportInput } from "@/lib/share";
 import {
@@ -45,16 +45,18 @@ export function ShareButton({
 
   const payload = buildSharePayload(input);
 
-  const markShare = useCallback(() => {
+  // Plain functions: the React Compiler memoizes these automatically, and a
+  // manual useCallback here cannot be preserved (it closes over setState).
+  const markShare = () => {
     const path =
       typeof window !== "undefined" ? window.location.pathname || "/" : "/";
     void trackAction("share", path);
-  }, []);
+  };
 
-  const showFeedback = useCallback((message: string) => {
+  const showFeedback = (message: string) => {
     setFeedback(message);
     window.setTimeout(() => setFeedback(null), 2000);
-  }, []);
+  };
 
   useEffect(() => {
     if (!open) return;

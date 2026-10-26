@@ -32,8 +32,9 @@ export function PoliticianCard({ member, loadVotes = true }: PoliticianCardProps
   const cardRef = useRef<HTMLDivElement>(null);
   const [report, setReport] = useState<ReportCard | null>(null);
   const [visible, setVisible] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  // Derived rather than set inside the effect, which would cascade renders.
+  const loading = loadVotes && visible && !report && !loadFailed;
 
   const displayName = formatDisplayName(member.name);
   const subtitle = formatMemberSubtitle(member);
@@ -79,8 +80,6 @@ export function PoliticianCard({ member, loadVotes = true }: PoliticianCardProps
     if (!visible || !loadVotes) return;
 
     let cancelled = false;
-    setLoading(true);
-    setLoadFailed(false);
 
     reportCardQueue
       .enqueue(async () => {
@@ -98,9 +97,6 @@ export function PoliticianCard({ member, loadVotes = true }: PoliticianCardProps
       })
       .catch(() => {
         if (!cancelled) setLoadFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
       });
 
     return () => {
