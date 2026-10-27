@@ -97,27 +97,31 @@ jobs:
     env:
       TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
       TRIVY_TIMEOUT: 5m
-      TRIVY_SKIP_DB_UPDATE: "true"
-      TRIVY_SKIP_JAVA_DB_UPDATE: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Locate Trivy
+      - name: Ensure Trivy is available
         id: find
         run: |
           set -euo pipefail
           if command -v trivy >/dev/null 2>&1; then
             echo "path=$(command -v trivy)" >> "$GITHUB_OUTPUT"
             trivy --version
-          elif [ -x "$HOME/.local/bin/trivy" ]; then
-            echo "path=$HOME/.local/bin/trivy" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::trivy is not installed on this runner."
-            echo "Install once on the runner hosts:"
-            echo "  curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ~/.local/bin"
-            echo "Skipping install in CI keeps runs fast and avoids the download stall."
-            exit 1
+            exit 0
           fi
+          # Install once per runner host. Runners are persistent, so this is a
+          # one-time cost; afterwards the warm binary and DB make the scan ~7s.
+          BIN_DIR="$HOME/.local/bin"
+          mkdir -p "$BIN_DIR"
+          if [ -x "$BIN_DIR/trivy" ]; then
+            echo "path=$BIN_DIR/trivy" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Installing trivy into $BIN_DIR (first run on this runner)"
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b "$BIN_DIR"
+          echo "path=$BIN_DIR/trivy" >> "$GITHUB_OUTPUT"
+          "$BIN_DIR/trivy" --version
 
       - name: Trivy config + secret scan
         run: |
@@ -125,7 +129,8 @@ jobs:
           # Scan only what a fresh clone would contain. Self-hosted runners keep
           # local artifacts (.env, .deploy/, data/) that are gitignored and never
           # committed; scanning them flags secrets that cannot leak via the repo.
-          git ls-files -z > "$RUNNER_TEMP/tracked.txt"
+          CACHE="$HOME/.cache/trivy-ci"
+          mkdir -p "$CACHE"
           "${{ steps.find.outputs.path }}" fs . \
             --scanners vuln,misconfig,secret \
             --severity HIGH,CRITICAL \
@@ -133,7 +138,7 @@ jobs:
             --ignore-unfixed \
             --skip-dirs node_modules --skip-dirs .next --skip-dirs .git \
             --skip-dirs .deploy --skip-dirs data \
-            --cache-dir "$RUNNER_TEMP/trivy-cache"
+            --cache-dir "$CACHE"
 
   e2e:
     # Manual only: needs a running stack and is not part of the required path.
