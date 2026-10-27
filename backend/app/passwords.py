@@ -24,7 +24,6 @@ leaves the server; the offline blocklist is the enforced baseline.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 import unicodedata
@@ -176,14 +175,10 @@ def validate_password(password: str, *, email: str = "") -> str:
     return value
 
 
-def password_fingerprint(password: str) -> str:
-    """Stable, non-reversible identifier used only for breach-list lookups.
-
-    Returns the SHA-1 prefix/suffix pair used by the Pwned Passwords k-anonymity
-    API (the full hash never leaves the server).
-    """
-    digest = hashlib.sha1(_normalize(password).encode("utf-8")).hexdigest().upper()
-    return digest
+# There is deliberately no HIBP/fingerprint helper here. The offline blocklist
+# above is the enforced policy, and an unused SHA-1 helper tripped Bandit's B324
+# for no benefit. If a Pwned Passwords lookup is added later it must pass
+# usedforsecurity=False explicitly and be covered by tests.
 
 
 def rules_for_display() -> dict[str, object]:
