@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: tests-${{ github.workflow }}-${{ github.ref }}
@@ -34,9 +35,15 @@ jobs:
       - name: Bandit (security)
         run: bandit -q -r backend/app -x backend/tests -ll
 
-      - name: Run pytest
+      - name: Run pytest (with coverage)
         working-directory: backend
-        run: python -m pytest -q --tb=short
+        # --cov=app resolves the source via backend/app; the coverage config
+        # (omit main.py, branch mode) lives in the repo-root pyproject.toml, which
+        # coverage only discovers via an explicit --cov-config from this cwd.
+        run: |
+          python -m pytest -q --tb=short \
+            --cov=app --cov-config=../pyproject.toml \
+            --cov-report=term-missing --cov-fail-under=70
 
   frontend:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -75,6 +82,10 @@ jobs:
         working-directory: frontend
         run: npm test
 
+      - name: Run Vitest (coverage)
+        working-directory: frontend
+        run: npm run test:coverage
+
   security-scan:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Container (Trivy config)
@@ -93,3 +104,53 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
+
+  e2e:
+    # Manual only: needs a running stack and is not part of the required path.
+    if: github.event_name == 'workflow_dispatch'
+    name: E2E (Playwright smoke, manual)
+    runs-on: [self-hosted, Linux, X64, squidsec]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      # Installed per-job so Playwright never becomes a repo dependency.
+      - name: Install Playwright
+        working-directory: frontend
+        run: |
+          npm install --no-save @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.E2E_API_URL || 'http://localhost:8000' }}
+        run: npm run build
+
+      - name: Start frontend
+        working-directory: frontend
+        run: |
+          nohup npm start > /tmp/ocs-e2e-frontend.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://localhost:3000/admin/login; then exit 0; fi
+            sleep 2
+          done
+          echo "frontend did not become ready"; tail -50 /tmp/ocs-e2e-frontend.log; exit 1
+
+      - name: Run smoke spec
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'http://localhost:3000' }}
+        run: npx playwright test e2e/smoke.spec.ts --reporter=list

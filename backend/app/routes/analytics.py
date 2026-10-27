@@ -9,11 +9,15 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.analytics_store import CLIENT_ACTIONS, get_impact_counts, record_action, record_page_view
+from app.bot_filter import RateTracker, classify, is_asset_path, is_probe_path
 from app.security import client_ip, rate_limit
 
 router = APIRouter()
 
 _PATH_RE = re.compile(r"^/[A-Za-z0-9/_\-.%~]*$")
+
+# One instance-wide counter for the "too fast to be a person" signal.
+_RATE = RateTracker(limit=60, window_seconds=60.0)
 
 
 class PageViewEvent(BaseModel):
@@ -57,15 +61,36 @@ async def track_page_view(body: PageViewEvent, request: Request):
     if (
         lower.startswith("/api/")
         or lower.startswith("/_next/")
-        or lower.endswith((".js", ".css", ".map", ".ico", ".png", ".jpg", ".svg", ".woff2"))
+        or is_asset_path(lower)
     ):
         return {"ok": True, "skipped": True}
 
+    # Probes never render a page, so they are not visitor traffic at all.
+    if is_probe_path(lower):
+        return {"ok": True, "skipped": True}
+
+    ip = client_ip(request)
     ua = request.headers.get("user-agent", "")
+
+    # Classify before storing. The row is still written, tagged with a reason,
+    # so the filter can be audited and rules can be re-run over history.
+    verdict = classify(
+        ua,
+        headers=dict(request.headers),
+        rate_exceeded=_RATE.exceeded(ip, ua),
+        datacenter_org=request.headers.get("x-datacenter-org", ""),
+    )
+
     # sqlite3 is blocking; keep it off the event loop.
     await asyncio.to_thread(
-        record_page_view, path, referrer=body.referrer or None, user_agent=ua
+        record_page_view,
+        path,
+        referrer=body.referrer or None,
+        user_agent=ua,
+        is_bot=verdict.is_bot,
+        bot_reason=verdict.reason,
     )
+    # Do not tell a bot it was filtered; a plain success keeps probes quiet.
     return {"ok": True}
 
 

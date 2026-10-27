@@ -4,7 +4,7 @@ import { ENABLE_BOARD_PAGE, ENABLE_DONATE_PAGE } from "@/lib/feature-flags";
 
 export function Footer() {
   return (
-    <footer className="bg-blue text-white text-center py-10 px-4 text-[0.95rem]">
+    <footer className="site-footer bg-blue text-white text-center py-10 px-4 text-[0.95rem]">
       <p className="m-0">
         <strong>One Nation Under God • United in Defense of Our Children</strong>
       </p>
@@ -56,6 +56,11 @@ export function Footer() {
         )}
         <a href="/disclaimer" className="underline hover:opacity-100">
           Disclaimer
+        </a>
+        {/* Staff-only entry point. The route itself redirects anonymous
+            visitors to the sign-in form and is noindex. */}
+        <a href="/admin/login" className="underline hover:opacity-100">
+          Admin
         </a>
       </p>
       <SocialLinks variant="footer" className="mt-4 text-sm opacity-85" />

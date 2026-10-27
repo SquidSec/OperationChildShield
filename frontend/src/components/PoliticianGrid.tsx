@@ -15,15 +15,21 @@ interface PoliticianGridProps {
   isSearch?: boolean;
   partyFilter?: string;
   stateFilter?: string;
+  chamberFilter?: string;
   error?: string | null;
   infiniteScroll?: boolean;
   listFilters?: MemberFilters;
 }
 
-function filterSummary(party?: string, state?: string): string | null {
+function filterSummary(
+  party?: string,
+  state?: string,
+  chamber?: string
+): string | null {
   const parts: string[] = [];
   if (party) parts.push(party);
   if (state) parts.push(state);
+  if (chamber) parts.push(chamber);
   if (!parts.length) return null;
   return parts.join(" · ");
 }
@@ -34,11 +40,12 @@ export function PoliticianGrid({
   isSearch = false,
   partyFilter,
   stateFilter,
+  chamberFilter,
   error,
   infiniteScroll = false,
   listFilters,
 }: PoliticianGridProps) {
-  const activeFilterLabel = filterSummary(partyFilter, stateFilter);
+  const activeFilterLabel = filterSummary(partyFilter, stateFilter, chamberFilter);
   const [members, setMembers] = useState(initialMembers);
   const [total, setTotal] = useState(initialTotal);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -79,8 +86,8 @@ export function PoliticianGrid({
         return [...prev, ...next];
       });
       setTotal(data.total);
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Failed to load more members");
+    } catch {
+      setLoadError("We couldn't load more members. Please try again.");
     } finally {
       setLoadingMore(false);
     }
@@ -107,48 +114,62 @@ export function PoliticianGrid({
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red/30 bg-red/5 px-6 py-8 text-center max-w-xl mx-auto">
+      <div
+        className="rounded-lg border border-red/30 bg-red/5 px-6 py-8 text-center max-w-xl mx-auto"
+        role="alert"
+      >
         <p className="text-red font-semibold">Unable to load congressional data</p>
         <p className="text-sm text-muted mt-2">{error}</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-md border border-red/40 bg-surface px-4 py-2 text-sm font-bold text-red hover:bg-red/5"
+        >
+          Try again
+        </button>
       </div>
     );
   }
 
   if (members.length === 0) {
     return (
-      <p className="text-center text-muted py-12">
-        {activeFilterLabel
-          ? `No members match ${activeFilterLabel}. Try adjusting your filters.`
-          : "No members match your search. Try a different name or state."}
-      </p>
+      <div className="mx-auto max-w-xl rounded-lg border border-card-border bg-surface px-6 py-10 text-center">
+        <p className="m-0 font-semibold text-foreground">
+          {activeFilterLabel
+            ? `No members match ${activeFilterLabel}.`
+            : "No members match your search."}
+        </p>
+        <p className="mt-2 text-sm text-muted">
+          {activeFilterLabel
+            ? "Try clearing a filter, or search by name or state."
+            : "Try a different last name, a state, or a city."}
+        </p>
+      </div>
     );
   }
 
+  const countMessage = isSearch
+    ? members.length === total
+      ? `Found ${total} member${total === 1 ? "" : "s"} matching your search${activeFilterLabel ? ` (${activeFilterLabel})` : ""}.`
+      : `Showing ${members.length} of ${total} matches${activeFilterLabel ? ` (${activeFilterLabel})` : ""}.`
+    : `Showing ${members.length} of ${total} member${total === 1 ? "" : "s"}${activeFilterLabel ? ` matching ${activeFilterLabel}` : ""}.`;
+
   return (
     <>
-      {!isSearch && activeFilterLabel && (
-        <p className="text-center text-muted text-sm mb-6">
-          Showing {members.length}
-          {total > members.length ? ` of ${total}` : ""} member
-          {total === 1 ? "" : "s"} matching{" "}
-          <strong className="text-foreground">{activeFilterLabel}</strong>
-          {total > members.length ? ". Scroll down to load more." : "."}
-        </p>
-      )}
-      {!isSearch && !activeFilterLabel && total > members.length && (
-        <p className="text-center text-muted text-sm mb-6 px-2">
-          Showing {members.length} of {total} members. Scroll down to load more.{" "}
-          <strong className="text-foreground">Search by name or state</strong> to find
-          a specific representative.
-        </p>
-      )}
-      {isSearch && (
-        <p className="text-center text-muted text-sm mb-6">
-          {members.length === total
-            ? `Found ${total} member${total === 1 ? "" : "s"} matching your search${activeFilterLabel ? ` (${activeFilterLabel})` : ""}.`
-            : `Showing ${members.length} of ${total} matches${activeFilterLabel ? ` (${activeFilterLabel})` : ""}.`}
-        </p>
-      )}
+      {/* Announce result counts to screen readers after a search or filter change. */}
+      <p
+        className="text-center text-muted text-sm mb-6"
+        role="status"
+        aria-live="polite"
+      >
+        {isSearch
+          ? countMessage
+          : activeFilterLabel
+            ? `${countMessage}${total > members.length ? " Scroll down to load more." : "."}`
+            : total > members.length
+              ? `Showing ${members.length} of ${total} members. Scroll down to load more. Search by name or state to find a specific representative.`
+              : `Showing all ${total} member${total === 1 ? "" : "s"}.`}
+      </p>
       {/* min(100%, 280px) prevents horizontal overflow / card overlap on narrow phones */}
       <div className="grid w-full min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] items-stretch gap-4 sm:gap-6">
         {members.map((member) => (
@@ -160,12 +181,20 @@ export function PoliticianGrid({
 
       {hasMore && (
         <div ref={sentinelRef} className="py-10 text-center">
-          <p className="text-sm text-muted">Scroll for more members</p>
+          <p className="text-sm text-muted" role="status" aria-live="polite">
+            {loadingMore ? "Loading more members..." : "Scroll for more members"}
+          </p>
         </div>
       )}
 
+      {!hasMore && total > 0 && members.length >= total && infiniteScroll && (
+        <p className="py-8 text-center text-sm text-muted">
+          You&apos;ve reached the end of the directory.
+        </p>
+      )}
+
       {loadError && (
-        <div className="text-center mt-4">
+        <div className="text-center mt-4" role="alert">
           <p className="text-sm text-red">{loadError}</p>
           <button
             type="button"

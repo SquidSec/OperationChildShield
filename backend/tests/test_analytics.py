@@ -107,3 +107,58 @@ def test_skips_asset_paths(tmp_path, monkeypatch):
     finally:
         conn.close()
     assert count == 0
+
+
+class TestBotFiltering:
+    def _post(self, client, ua, path="/", headers=None):
+        base = {"user-agent": ua, "accept": "text/html", "accept-language": "en-US"}
+        base.update(headers or {})
+        return client.post(
+            "/api/analytics/event",
+            json={"path": path},
+            headers=base,
+        )
+
+    def test_bot_traffic_is_stored_but_excluded_from_metrics(self, tmp_path, monkeypatch):
+        from app.analytics_store import get_traffic_overview
+
+        client = _app(tmp_path, monkeypatch)
+
+        self._post(client, "Mozilla/5.0 (X11; Linux x86_64) Chrome/120.0 Safari/537.36")
+        self._post(client, "Googlebot/2.1 (+http://www.google.com/bot.html)")
+        self._post(client, "curl/8.4.0")
+
+        overview = get_traffic_overview(7)
+        assert overview["pageViews"] == 1
+        assert overview["botPageViews"] == 2
+        reasons = {r["reason"] for r in overview["botReasons"]}
+        assert {"declared-search", "client-lib"} <= reasons
+
+    def test_asset_and_probe_paths_are_skipped(self, tmp_path, monkeypatch):
+        from app.analytics_store import get_traffic_overview
+
+        client = _app(tmp_path, monkeypatch)
+
+        self._post(client, "curl/8.4.0", path="/_next/static/chunk.js")
+        self._post(client, "curl/8.4.0", path="/wp-login.php")
+        self._post(client, "curl/8.4.0", path="/api/analytics/event")
+        assert get_traffic_overview(7)["pageViews"] == 0
+        assert get_traffic_overview(7)["botPageViews"] == 0
+
+    def test_reclassify_promotes_historical_bot_rows(self, tmp_path, monkeypatch):
+        from app.analytics_store import get_traffic_overview, reclassify_page_views
+
+        _app(tmp_path, monkeypatch)
+
+        # Simulate a row stored before filtering existed.
+        import sqlite3
+        from app import analytics_store
+
+        analytics_store.record_page_view("/", user_agent="SomeCrawler/1.0")
+        with sqlite3.connect(analytics_store._db_path()) as conn:
+            conn.execute("UPDATE page_views SET is_bot = 0, bot_reason = ''")
+            conn.commit()
+
+        assert get_traffic_overview(7)["pageViews"] >= 1
+        result = reclassify_page_views()
+        assert result["promoted"] >= 1

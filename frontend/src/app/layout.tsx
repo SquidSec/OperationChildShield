@@ -1,12 +1,6 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { Inter, Roboto_Mono } from "next/font/google";
 import { headers } from "next/headers";
-import { Footer } from "@/components/Footer";
-import { Header } from "@/components/Header";
-import { NcmecReportBanner } from "@/components/NcmecReportBanner";
-import { NonprofitBadge } from "@/components/NonprofitBadge";
-import { VisitTracker } from "@/components/VisitTracker";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
@@ -85,14 +79,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col antialiased bg-background text-foreground transition-colors duration-200">
-        <NcmecReportBanner variant="banner" />
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
-        <NonprofitBadge />
-        <Suspense fallback={null}>
-          <VisitTracker />
-        </Suspense>
+        {children}
       </body>
     </html>
   );

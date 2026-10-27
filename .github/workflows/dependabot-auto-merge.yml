@@ -1,0 +1,37 @@
+name: Dependabot auto-merge
+
+# Enables auto-merge only for grouped patch/minor dependency PRs opened by
+# Dependabot. Branch protection still gates the merge on required checks, so a
+# failing CI run keeps the PR open. Manual review stays required for majors.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2.5.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # `.github/dependabot.yml` configures grouped updates, so the PRs that
+      # reach here are group PRs. Guard on both the update type and a non-empty
+      # dependency list; anything else needs a human.
+      - name: Enable auto-merge (grouped patch/minor only)
+        if: |
+          steps.meta.outputs.dependencies != '' && (
+            steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+            steps.meta.outputs.update-type == 'version-update:semver-minor'
+          )
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash "$PR_URL"

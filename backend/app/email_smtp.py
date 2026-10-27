@@ -89,6 +89,14 @@ def send_email(
         raise
 
 
+def send_plain_email(to: str, subject: str, body: str) -> None:
+    """Convenience wrapper for account and alert mail.
+
+    Raises RuntimeError when SMTP is unconfigured so callers can log and move on.
+    """
+    send_email(to=to, subject=subject, body=body)
+
+
 def notify_involve_signup(record: dict[str, Any]) -> bool:
     """Email the ops inbox about a new Join Us submission. Returns True if sent."""
     if not settings.smtp_configured:

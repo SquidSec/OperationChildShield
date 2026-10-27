@@ -52,6 +52,7 @@ backend/data/
 *.db
 *.log
 logs/
+.local-deploy/
 
 # OS & editor
 .DS_Store

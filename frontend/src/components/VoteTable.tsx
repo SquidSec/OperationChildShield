@@ -34,7 +34,7 @@ export function VoteTable({ votes }: VoteTableProps) {
         return (
           <div
             key={vote.bill_id}
-            className="py-3 px-4 bg-surface-muted rounded-md border-l-4 border-red"
+            className="vote-row py-3 px-4 bg-surface-muted rounded-md border-l-4 border-red"
           >
             <div className="flex justify-between items-center gap-3">
               <div className="flex-1 min-w-0">
