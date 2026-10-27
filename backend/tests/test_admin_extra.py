@@ -12,9 +12,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app import admin_jobs, admin_store, analytics_store, backup
+from app import admin_jobs, admin_store, analytics_store, backup, captcha
 from app.routes import admin
 from app.security import reset_rate_limits_for_tests
+from tests.captcha_helpers import solved_token
 
 PASSWORD = "correct horse battery staple"
 NEW_PASSWORD = "an even longer passphrase"
@@ -46,11 +47,8 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
     admin_store.init_admin_db()
     analytics_store.init_analytics_db()
     reset_rate_limits_for_tests()
+    captcha.reset_for_tests()
 
-    async def fake_verify(token: str, *, remote_ip: str | None = None) -> bool:
-        return token == "valid-token"
-
-    monkeypatch.setattr(admin, "verify_turnstile", fake_verify)
 
     app = FastAPI()
     app.include_router(admin.router, prefix="/api")
@@ -66,7 +64,7 @@ def _password_step(client: TestClient, email: str = "admin@example.org",
     """Step 1 of sign-in. Returns the challenge payload, never a session."""
     return client.post(
         "/api/admin/login",
-        json={"email": email, "password": password, "captcha_token": "valid-token"},
+        json={"email": email, "password": password, "captcha_token": solved_token(client)},
     )
 
 

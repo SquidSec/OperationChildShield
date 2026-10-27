@@ -47,17 +47,11 @@ export function proxy(request: NextRequest) {
   // stylesheet from rsms.me. Injected styles cannot carry our nonce, so that route
   // drops the style nonce in favor of 'unsafe-inline'; every other route keeps it.
   const isDonate = request.nextUrl.pathname.startsWith("/donate");
-  // Cloudflare Turnstile loads its widget script and injects its own styles,
-  // which cannot carry our nonce. Routes with a captcha (admin login, the board
-  // application form) allow inline styles; every other route keeps the nonce.
-  const isAdminLogin = request.nextUrl.pathname.startsWith("/admin/login");
-  const hasCaptcha =
-    isAdminLogin || request.nextUrl.pathname.startsWith("/board/apply");
+  // The captcha is self-hosted proof of work: no third-party script, iframe, or
+  // style origin is needed, so captcha routes keep the same strict policy.
   const styleSrc = isDonate
     ? "style-src 'self' 'unsafe-inline' https://rsms.me https://donorbox.org"
-    : hasCaptcha
-      ? "style-src 'self' 'unsafe-inline' https://challenges.cloudflare.com"
-      : `style-src 'self' 'nonce-${nonce}'`;
+    : `style-src 'self' 'nonce-${nonce}'`;
 
   const csp = [
     "default-src 'self'",
@@ -69,13 +63,9 @@ export function proxy(request: NextRequest) {
     `img-src 'self' data: blob: https://www.congress.gov${isDonate ? " https://donorbox.org" : ""}`,
     `font-src 'self' data:${isDonate ? " https://rsms.me" : ""}`,
     styleSrc,
-    // Turnstile sets inline styles on its container, so captcha routes rely on
-    // style-src above; other routes keep attribute styles for React props.
-    ...(hasCaptcha ? [] : ["style-src-attr 'unsafe-inline'"]),
+    "style-src-attr 'unsafe-inline'",
     // Nonce + strict-dynamic: no 'unsafe-inline'. Dev-only eval for React refresh.
-    // Turnstile's script carries the request nonce (see app/admin/login/page.tsx);
-    // strict-dynamic lets it load the scripts it needs in turn.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     isDonate
       ? `${connectSrcDirective(isDev).replace("connect-src ", "connect-src https://donorbox.org ")}`
       : connectSrcDirective(isDev),
@@ -83,7 +73,6 @@ export function proxy(request: NextRequest) {
     ...(isDonate
       ? ["frame-src https://donorbox.org https://js.stripe.com https://www.paypal.com"]
       : []),
-    ...(hasCaptcha ? ["frame-src https://challenges.cloudflare.com"] : []),
     "upgrade-insecure-requests",
   ]
     .join("; ")

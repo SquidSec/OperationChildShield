@@ -7,11 +7,12 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app import admin_store, analytics_store, applications_store
+from app import admin_store, analytics_store, applications_store, captcha
 from app import passwords
 from app.routes import admin, board
 from app.sanitize import clean_short, clean_text, looks_like_markup, sanitize_application
 from app.security import reset_rate_limits_for_tests
+from tests.captcha_helpers import solved_token
 from tests.admin_login_helpers import enrol, totp
 
 GOOD = "harbor lantern velvet quartz"
@@ -166,11 +167,8 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
     admin_store.init_admin_db()
     analytics_store.init_analytics_db()
     reset_rate_limits_for_tests()
+    captcha.reset_for_tests()
 
-    async def fake_verify(token: str, *, remote_ip: str | None = None) -> bool:
-        return True
-
-    monkeypatch.setattr(admin, "verify_turnstile", fake_verify)
 
     app = FastAPI()
     app.include_router(admin.router, prefix="/api")
@@ -182,7 +180,7 @@ def _sign_in(client: TestClient, role: str = "owner") -> None:
     enrol("boss@example.org")
     first = client.post(
         "/api/admin/login",
-        json={"email": "boss@example.org", "password": GOOD, "captcha_token": "t"},
+        json={"email": "boss@example.org", "password": GOOD, "captcha_token": solved_token(client)},
     )
     challenge = first.json()["challenge"]
     secret = admin_store.get_mfa_secret(int(admin_store.get_admin_by_email("boss@example.org")["id"]))
@@ -229,7 +227,7 @@ def test_challenge_is_single_use_and_expires(client):
     client.post("/api/admin/logout")
     first = client.post(
         "/api/admin/login",
-        json={"email": "boss@example.org", "password": GOOD, "captcha_token": "t"},
+        json={"email": "boss@example.org", "password": GOOD, "captcha_token": solved_token(client)},
     )
     challenge = first.json()["challenge"]
     secret = admin_store.get_mfa_secret(int(admin_store.get_admin_by_email("boss@example.org")["id"]))
@@ -248,7 +246,7 @@ def test_wrong_code_does_not_create_session(client):
     client.post("/api/admin/logout")
     first = client.post(
         "/api/admin/login",
-        json={"email": "boss@example.org", "password": GOOD, "captcha_token": "t"},
+        json={"email": "boss@example.org", "password": GOOD, "captcha_token": solved_token(client)},
     )
     wrong = client.post(
         "/api/admin/otp/verify",
@@ -263,7 +261,7 @@ def test_challenge_attempts_are_capped(client):
     client.post("/api/admin/logout")
     first = client.post(
         "/api/admin/login",
-        json={"email": "boss@example.org", "password": GOOD, "captcha_token": "t"},
+        json={"email": "boss@example.org", "password": GOOD, "captcha_token": solved_token(client)},
     )
     challenge = first.json()["challenge"]
     for _ in range(admin_store.MAX_CHALLENGE_ATTEMPTS):
@@ -277,7 +275,7 @@ def test_recovery_code_works_once(client):
     client.post("/api/admin/logout")
     first = client.post(
         "/api/admin/login",
-        json={"email": "boss@example.org", "password": GOOD, "captcha_token": "t"},
+        json={"email": "boss@example.org", "password": GOOD, "captcha_token": solved_token(client)},
     )
     user = admin_store.get_admin_by_email("boss@example.org")
     codes = admin_store.generate_recovery_codes(2)
@@ -292,7 +290,7 @@ def test_recovery_code_works_once(client):
     client.post("/api/admin/logout")
     second = client.post(
         "/api/admin/login",
-        json={"email": "boss@example.org", "password": GOOD, "captcha_token": "t"},
+        json={"email": "boss@example.org", "password": GOOD, "captcha_token": solved_token(client)},
     )
     reused = client.post(
         "/api/admin/otp/verify",
@@ -307,22 +305,19 @@ def test_recovery_code_works_once(client):
 @pytest.fixture
 def board_client(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setattr(board.settings, "cache_dir", str(tmp_path))
-    monkeypatch.setattr(board.settings, "admin_captcha_disabled", False)
-    monkeypatch.setattr(board.settings, "turnstile_secret_key", "")
     reset_rate_limits_for_tests()
-
-    async def fake_verify(token: str, *, remote_ip: str | None = None) -> bool:
-        return token == "valid-token"
-
-    monkeypatch.setattr(board, "verify_turnstile", fake_verify)
+    captcha.reset_for_tests()
     monkeypatch.setattr(board, "_notify_application", lambda record: None)
 
     app = FastAPI()
+    # Mount the admin router so a real challenge can be issued and solved.
+    app.include_router(admin.router, prefix="/api")
     app.include_router(board.router, prefix="/api")
     return TestClient(app)
 
 
 def test_application_is_stored_without_control_characters(board_client, tmp_path):
+    token = solved_token(board_client)
     res = board_client.post(
         "/api/board/apply",
         json={
@@ -331,7 +326,7 @@ def test_application_is_stored_without_control_characters(board_client, tmp_path
             "email": "jane@example.org",
             "statement": "Board service\x0b and\x202e strategy",
             "consent": True,
-            "captcha_token": "valid-token",
+            "captcha_token": token,
         },
     )
     assert res.status_code == 200

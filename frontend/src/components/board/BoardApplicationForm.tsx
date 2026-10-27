@@ -1,68 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { loadTurnstile, TURNSTILE_RENDER_OPTIONS } from "@/lib/turnstile";
+import { useState, type FormEvent } from "react";
+import { PowCaptcha } from "@/components/PowCaptcha";
 
 const inputClass =
   "mt-1 w-full rounded-lg border border-card-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-blue focus:ring-2 focus:ring-blue/20";
 
-export function BoardApplicationForm({
-  nonce,
-  captchaRequired,
-  captchaSiteKey,
-}: {
-  nonce?: string;
-  captchaRequired: boolean;
-  captchaSiteKey: string;
-}) {
-  const widgetRef = useRef<HTMLDivElement>(null);
-  const widgetIdRef = useRef<string | null>(null);
+export function BoardApplicationForm() {
   const [captchaToken, setCaptchaToken] = useState("");
-  const [captchaError, setCaptchaError] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
-
-  const captchaEnabled = captchaRequired && Boolean(captchaSiteKey);
-
-  useEffect(() => {
-    if (!captchaEnabled) return;
-    let cancelled = false;
-
-    loadTurnstile(nonce)
-      .then((api) => {
-        if (cancelled || !widgetRef.current || widgetIdRef.current) return;
-        widgetIdRef.current = api.render(widgetRef.current, {
-          sitekey: captchaSiteKey,
-          theme: "auto",
-          ...TURNSTILE_RENDER_OPTIONS,
-          callback: (token) => {
-            setCaptchaToken(token);
-            setCaptchaError(null);
-          },
-          "expired-callback": () => setCaptchaToken(""),
-          "error-callback": () => {
-            setCaptchaToken("");
-            setCaptchaError("Captcha could not load. Refresh the page and try again.");
-          },
-        });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCaptchaError("Captcha could not load. Refresh the page and try again.");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [captchaEnabled, captchaSiteKey, nonce]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
-    if (captchaEnabled && !captchaToken) {
-      setCaptchaError("Complete the captcha before submitting.");
+    if (!captchaToken) {
+      setError("Wait for the bot check to finish, then submit again.");
       return;
     }
 
@@ -90,9 +44,7 @@ export function BoardApplicationForm({
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { detail?: string } | null;
         setError(body?.detail ?? "We could not submit your application. Please try again.");
-        if (captchaEnabled && window.turnstile) {
-          window.turnstile.reset(widgetIdRef.current ?? undefined);
-        }
+        // A failed submit burns the challenge server-side; solve a new one.
         setCaptchaToken("");
         setStatus("idle");
         return;
@@ -178,28 +130,7 @@ export function BoardApplicationForm({
         <span>I agree to be contacted about this application. *</span>
       </label>
 
-      {captchaEnabled ? (
-        <div className="rounded-lg border border-card-border bg-surface-muted p-3">
-          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-muted">
-            Bot check <span className="text-red">*</span>
-          </p>
-          <div
-            ref={widgetRef}
-            className="mt-2 min-h-[65px]"
-            aria-label="Bot verification"
-          />
-          <p className="m-0 mt-1 text-[11px] text-muted" role="status">
-            {captchaToken
-              ? "Verified. You can submit your application."
-              : "Complete the check above to enable Submit."}
-          </p>
-          {captchaError && <p className="mt-1 text-xs text-red">{captchaError}</p>}
-        </div>
-      ) : (
-        <p className="rounded-lg border border-card-border bg-surface p-3 text-xs text-muted">
-          Applications are closed until the site owner configures captcha keys.
-        </p>
-      )}
+      <PowCaptcha onToken={setCaptchaToken} />
 
       {error && (
         <p role="alert" className="rounded-lg border border-red/40 bg-red/5 p-3 text-sm text-red">
@@ -209,20 +140,18 @@ export function BoardApplicationForm({
 
       <button
         type="submit"
-        disabled={
-          status === "submitting" || !captchaEnabled || (captchaEnabled && !captchaToken)
-        }
+        disabled={status === "submitting" || !captchaToken}
         className="w-full rounded-full bg-blue px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-8"
       >
         {status === "submitting"
           ? "Submitting…"
-          : captchaEnabled && !captchaToken
-            ? "Complete the bot check first"
+          : !captchaToken
+            ? "Waiting for bot check…"
             : "Submit application"}
       </button>
 
       <p className="text-[11px] leading-relaxed text-muted">
-        Protected by Cloudflare Turnstile. We use your details only to review this
+        Protected by a self-hosted proof-of-work check. We use your details only to review this
         application.
       </p>
     </form>

@@ -9,9 +9,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app import admin_store, analytics_store, applications_store
+from app import admin_store, analytics_store, applications_store, captcha
 from app.routes import admin
 from app.security import reset_rate_limits_for_tests
+from tests.captcha_helpers import solved_token
 from tests.admin_login_helpers import enrol, totp
 
 PASSWORD = "harbor lantern velvet quartz"
@@ -28,11 +29,8 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
     admin_store.init_admin_db()
     analytics_store.init_analytics_db()
     reset_rate_limits_for_tests()
+    captcha.reset_for_tests()
 
-    async def fake_verify(token: str, *, remote_ip: str | None = None) -> bool:
-        return True
-
-    monkeypatch.setattr(admin, "verify_turnstile", fake_verify)
 
     app = FastAPI()
     app.include_router(admin.router, prefix="/api")
@@ -50,7 +48,7 @@ def _sign_in(client: TestClient, email: str = "owner@example.org", password: str
         secret = enrol(email)
     first = client.post(
         "/api/admin/login",
-        json={"email": email, "password": password, "captcha_token": "t"},
+        json={"email": email, "password": password, "captcha_token": solved_token(client)},
     )
     assert first.status_code == 200, first.text
     res = client.post(
@@ -215,7 +213,7 @@ def test_disabled_account_cannot_sign_in(client, owner):
     client.post(f"/api/admin/users/{target['id']}/disable")
     res = client.post(
         "/api/admin/login",
-        json={"email": "editor@example.org", "password": PASSWORD, "captcha_token": "t"},
+        json={"email": "editor@example.org", "password": PASSWORD, "captcha_token": solved_token(client)},
     )
     assert res.status_code == 401
 

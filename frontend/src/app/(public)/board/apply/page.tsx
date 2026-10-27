@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { BoardApplicationForm } from "@/components/board/BoardApplicationForm";
-import { getAdminConfig } from "@/lib/admin-api";
 
 export const metadata: Metadata = {
   title: "Vice President application",
@@ -13,10 +11,6 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function BoardApplyPage() {
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
-  // Same Turnstile widget keys as the admin login; captcha is required.
-  const config = await getAdminConfig();
-
   return (
     <div className="page-container py-10">
       <div className="mx-auto max-w-2xl">
@@ -53,11 +47,7 @@ export default async function BoardApplyPage() {
           application. Fields marked with an asterisk are required.
         </p>
 
-        <BoardApplicationForm
-          nonce={nonce}
-          captchaRequired={config.captchaRequired}
-          captchaSiteKey={config.captchaSiteKey}
-        />
+        <BoardApplicationForm />
       </div>
     </div>
   );

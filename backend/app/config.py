@@ -94,8 +94,13 @@ class Settings(BaseSettings):
     admin_session_hours: int = 12
     # Force the Secure flag; also applied automatically for HTTPS requests.
     admin_cookie_secure: bool = False
-    # Cloudflare Turnstile. Verification fails closed when the secret is unset
-    # unless ADMIN_CAPTCHA_DISABLED is explicitly true (local dev only).
+    # Captcha is a self-hosted SHA-256 proof of work: no keys, no third party.
+    # Difficulty is leading zero bits; expected work is 2**difficulty hashes.
+    # 17 ~= 0.8s in a desktop browser. Raise it to make automation costlier.
+    pow_difficulty: int = 17
+
+    # Legacy Turnstile settings. Kept so existing .env files keep parsing; the
+    # application no longer reads them.
     turnstile_secret_key: str = ""
     turnstile_site_key: str = ""
     admin_captcha_disabled: bool = False
@@ -104,7 +109,8 @@ class Settings(BaseSettings):
 
     @property
     def captcha_enforced(self) -> bool:
-        return bool(self.turnstile_secret_key) and not self.admin_captcha_disabled
+        # The proof-of-work captcha needs no configuration and is always on.
+        return True
 
     @property
     def admin_allowed_hostname_list(self) -> list[str]:

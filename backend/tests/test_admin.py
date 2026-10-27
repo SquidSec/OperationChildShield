@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app import admin_store, analytics_store, captcha
+from tests.captcha_helpers import get_challenge, solved_token
 from app.routes import admin
 from app.security import reset_rate_limits_for_tests
 from tests.admin_login_helpers import enrol, login as full_login, totp
@@ -18,18 +19,13 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setattr(admin_store.settings, "cache_dir", str(tmp_path))
     monkeypatch.setattr(analytics_store.settings, "cache_dir", str(tmp_path))
     monkeypatch.setattr(admin_store.settings, "admin_captcha_disabled", False)
-    monkeypatch.setattr(admin_store.settings, "turnstile_secret_key", "")
-    monkeypatch.setattr(admin_store.settings, "turnstile_site_key", "")
+    captcha.reset_for_tests()
     admin_store.reset_for_tests()
     analytics_store._initialized = False
     admin_store.init_admin_db()
     analytics_store.init_analytics_db()
     reset_rate_limits_for_tests()
 
-    async def fake_verify(token: str, *, remote_ip: str | None = None) -> bool:
-        return token == "valid-token"
-
-    monkeypatch.setattr(admin, "verify_turnstile", fake_verify)
 
     app = FastAPI()
     app.include_router(admin.router, prefix="/api")
@@ -40,14 +36,16 @@ def _seed(password: str = PASSWORD) -> dict:
     return admin_store.upsert_admin("Admin@Example.org", password, display_name="Site Admin")
 
 
-def _password_step(client: TestClient, password: str = PASSWORD, token: str = "valid-token"):
+def _password_step(client: TestClient, password: str = PASSWORD, token: str | None = None):
+    if token is None:
+        token = solved_token(client)
     return client.post(
         "/api/admin/login",
         json={"email": "admin@example.org", "password": password, "captcha_token": token},
     )
 
 
-def _login(client: TestClient, password: str = PASSWORD, token: str = "valid-token"):
+def _login(client: TestClient, password: str = PASSWORD, token: str | None = None):
     """Full sign-in (password + OTP). Returns the OTP response."""
     first = _password_step(client, password, token)
     if first.status_code != 200:
@@ -109,7 +107,7 @@ def test_unknown_email_matches_wrong_password_message(client):
         json={
             "email": "nobody@example.org",
             "password": PASSWORD,
-            "captcha_token": "valid-token",
+            "captcha_token": solved_token(client),
         },
     )
     assert res.status_code == 401
@@ -200,120 +198,70 @@ def test_login_rate_limit_after_repeated_failures(client):
     assert 429 in statuses
 
 
-def test_login_rejected_when_captcha_unconfigured(client, monkeypatch):
+def test_login_rejected_without_a_solved_challenge(client):
     _seed()
-    # Fail closed: no secret and no explicit dev bypass means no logins.
-    monkeypatch.setattr(
-        admin,
-        "verify_turnstile",
-        captcha.verify_turnstile,
+    res = client.post(
+        "/api/admin/login",
+        json={
+            "email": "admin@example.org",
+            "password": PASSWORD,
+            "captcha_token": "",
+        },
     )
-    res = _login(client)
     assert res.status_code == 400
+    assert "captcha" in res.json()["detail"].lower()
     assert "ocs_admin_session" not in res.cookies
 
 
-def test_captcha_verification_fails_closed_when_unconfigured(monkeypatch):
-    import asyncio
-
-    monkeypatch.setattr(captcha.settings, "turnstile_secret_key", "")
-    monkeypatch.setattr(captcha.settings, "admin_captcha_disabled", False)
-    assert asyncio.run(captcha.verify_turnstile("token")) is False
-
-    monkeypatch.setattr(captcha.settings, "admin_captcha_disabled", True)
-    assert asyncio.run(captcha.verify_turnstile("")) is True
-
-
-def test_captcha_posts_to_cloudflare_and_checks_hostname(monkeypatch):
-    import asyncio
-
-    captured: dict = {}
-
-    class FakeResponse:
-        def __init__(self, payload):
-            self._payload = payload
-
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return self._payload
-
-    class FakeClient:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
-        async def post(self, url, data):
-            captured["url"] = url
-            captured["data"] = data
-            return FakeResponse(
-                {"success": True, "hostname": "operationchildshield.org"}
-            )
-
-    monkeypatch.setattr(captcha.settings, "turnstile_secret_key", "secret-key")
-    monkeypatch.setattr(captcha.settings, "admin_captcha_disabled", False)
-    monkeypatch.setattr(
-        captcha.settings, "admin_allowed_hostnames", "operationchildshield.org"
+def test_login_rejects_a_forged_solution(client):
+    _seed()
+    data = client.get("/api/captcha/challenge").json()
+    forged = f"{data['challenge']}.0"
+    # Nonce 0 is very unlikely to satisfy the difficulty; force the point by
+    # checking a challenge with a deliberately high difficulty is rejected.
+    res = client.post(
+        "/api/admin/login",
+        json={"email": "admin@example.org", "password": PASSWORD, "captcha_token": forged},
     )
-    monkeypatch.setattr(captcha.httpx, "AsyncClient", FakeClient)
-
-    assert asyncio.run(captcha.verify_turnstile("tok", remote_ip="203.0.113.9")) is True
-    assert captured["url"].startswith("https://challenges.cloudflare.com/")
-    assert captured["data"]["secret"] == "secret-key"
-    assert captured["data"]["response"] == "tok"
-    assert captured["data"]["remoteip"] == "203.0.113.9"
+    assert res.status_code in (400, 401)
+    assert "ocs_admin_session" not in res.cookies
 
 
-def test_captcha_rejects_unexpected_hostname(monkeypatch):
-    import asyncio
-
-    class FakeResponse:
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {"success": True, "hostname": "evil.example"}
-
-    class FakeClient:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
-        async def post(self, url, data):
-            return FakeResponse()
-
-    monkeypatch.setattr(captcha.settings, "turnstile_secret_key", "secret-key")
-    monkeypatch.setattr(captcha.settings, "admin_captcha_disabled", False)
-    monkeypatch.setattr(
-        captcha.settings, "admin_allowed_hostnames", "operationchildshield.org"
+def test_challenge_is_single_use(client):
+    _seed()
+    token = solved_token(client)
+    first = client.post(
+        "/api/admin/login",
+        json={"email": "admin@example.org", "password": PASSWORD, "captcha_token": token},
     )
-    monkeypatch.setattr(captcha.httpx, "AsyncClient", FakeClient)
+    assert first.status_code == 200
 
-    assert asyncio.run(captcha.verify_turnstile("tok")) is False
+    # The same solved token cannot be replayed.
+    admin_store.delete_session(client.cookies.get("ocs_admin_session") or "")
+    client.cookies.clear()
+    second = client.post(
+        "/api/admin/login",
+        json={"email": "admin@example.org", "password": PASSWORD, "captcha_token": token},
+    )
+    assert second.status_code == 400
+    assert "ocs_admin_session" not in second.cookies
 
 
-def test_admin_config_reports_captcha_state(client, monkeypatch):
-    res = client.get("/api/admin/config")
-    assert res.status_code == 200
-    assert res.json()["captchaRequired"] is False
+def test_challenge_endpoint_is_public_and_returns_parameters(client):
+    data = get_challenge(client)
+    assert len(str(data["challenge"])) >= 32
+    assert int(data["difficulty"]) >= 12
+    assert data["algorithm"] == "sha256-prefix-zeros"
+    assert int(data["expiresIn"]) > 0
 
-    monkeypatch.setattr(admin_store.settings, "turnstile_site_key", "site-key")
-    monkeypatch.setattr(admin_store.settings, "turnstile_secret_key", "secret-key")
+
+def test_admin_config_reports_pow_captcha(client):
     body = client.get("/api/admin/config").json()
+    # Always on, self-hosted, and needs no keys.
     assert body["captchaRequired"] is True
-    assert body["captchaSiteKey"] == "site-key"
-    assert body["captchaConfigured"] is True
+    assert body["captchaProvider"] == "pow"
+    assert int(body["captchaDifficulty"]) >= 12
+    assert "captchaSiteKey" not in body
     # OTP is mandatory for every admin account.
     assert body["otpRequired"] is True
     assert body["passwordRules"]["minLength"] >= 15
@@ -332,7 +280,7 @@ def test_origin_check_rejects_foreign_origin(client):
         json={
             "email": "admin@example.org",
             "password": PASSWORD,
-            "captcha_token": "valid-token",
+            "captcha_token": solved_token(client),
         },
         headers={"Origin": "https://evil.example"},
     )

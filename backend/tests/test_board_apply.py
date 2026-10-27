@@ -5,9 +5,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app import analytics_store, users_store
-from app.routes import board
+from app import analytics_store, captcha, users_store
+from app.routes import admin, board
 from app.security import reset_rate_limits_for_tests
+from tests.captcha_helpers import solved_token
 
 
 @pytest.fixture
@@ -15,22 +16,19 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setattr(board.settings, "cache_dir", str(tmp_path))
     monkeypatch.setattr(analytics_store.settings, "cache_dir", str(tmp_path))
     monkeypatch.setattr(users_store.settings, "cache_dir", str(tmp_path))
-    monkeypatch.setattr(board.settings, "admin_captcha_disabled", False)
-    monkeypatch.setattr(board.settings, "turnstile_secret_key", "")
     reset_rate_limits_for_tests()
-
-    async def fake_verify(token: str, *, remote_ip: str | None = None) -> bool:
-        return token == "valid-token"
-
-    monkeypatch.setattr(board, "verify_turnstile", fake_verify)
+    captcha.reset_for_tests()
     monkeypatch.setattr(board, "_notify_application", lambda record: None)
 
     app = FastAPI()
+    # The challenge endpoint lives on the admin router; mount it so tests can
+    # solve a real challenge instead of mocking verification.
+    app.include_router(admin.router, prefix="/api")
     app.include_router(board.router, prefix="/api")
     return TestClient(app)
 
 
-def _payload(**overrides):
+def _payload(client=None, **overrides):
     body = {
         "role": "vice-president",
         "name": "Jane Applicant",
@@ -40,7 +38,7 @@ def _payload(**overrides):
         "linkedin": "https://example.org/jane",
         "statement": "I have served on two nonprofit boards.",
         "consent": True,
-        "captcha_token": "valid-token",
+        "captcha_token": "",
         "website": "",
     }
     body.update(overrides)
@@ -48,7 +46,7 @@ def _payload(**overrides):
 
 
 def test_application_persists_with_captcha(client, tmp_path):
-    res = client.post("/api/board/apply", json=_payload())
+    res = client.post("/api/board/apply", json=_payload(captcha_token=solved_token(client)))
     assert res.status_code == 200
     assert res.json()["ok"] is True
 
@@ -74,29 +72,29 @@ def test_application_rejected_with_invalid_captcha(client):
 
 
 def test_application_requires_consent(client):
-    res = client.post("/api/board/apply", json=_payload(consent=False))
+    res = client.post("/api/board/apply", json=_payload(captcha_token=solved_token(client), consent=False))
     assert res.status_code == 400
     assert "contact" in res.json()["detail"].lower()
 
 
 def test_application_rejects_closed_role(client):
-    res = client.post("/api/board/apply", json=_payload(role="president"))
+    res = client.post("/api/board/apply", json=_payload(captcha_token=solved_token(client), role="president"))
     assert res.status_code == 400
     assert "not open" in res.json()["detail"].lower()
 
 
 def test_application_rejects_invalid_email(client):
-    res = client.post("/api/board/apply", json=_payload(email="not-an-email"))
+    res = client.post("/api/board/apply", json=_payload(captcha_token=solved_token(client), email="not-an-email"))
     assert res.status_code == 422
 
 
 def test_honeypot_returns_silent_success(client, tmp_path):
-    res = client.post("/api/board/apply", json=_payload(website="http://spam.example"))
+    res = client.post("/api/board/apply", json=_payload(captcha_token=solved_token(client), website="http://spam.example"))
     assert res.status_code == 200
     assert res.json()["ok"] is True
     assert not (tmp_path / "board_applications.jsonl").exists()
 
 
 def test_application_requires_statement(client):
-    res = client.post("/api/board/apply", json=_payload(statement=""))
+    res = client.post("/api/board/apply", json=_payload(captcha_token=solved_token(client), statement=""))
     assert res.status_code == 422

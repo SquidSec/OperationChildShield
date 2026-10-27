@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminLoginForm } from "@/components/admin/AdminLoginForm";
-import { getAdminConfig, getAdminMe, hasAdminSessionCookie } from "@/lib/admin-api";
+import { getAdminMe, hasAdminSessionCookie } from "@/lib/admin-api";
 
 export const metadata: Metadata = {
   title: "Admin sign in",
@@ -14,7 +14,6 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminLoginPage() {
   const requestHeaders = await headers();
-  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   // Already signed in? Skip the form. Invalid cookies still render the form.
   const cookieHeader = requestHeaders.get("cookie") ?? "";
@@ -22,8 +21,6 @@ export default async function AdminLoginPage() {
     const user = await getAdminMe(cookieHeader);
     if (user) redirect("/admin");
   }
-
-  const config = await getAdminConfig();
 
   return (
     <div className="min-h-screen w-full bg-surface-muted">
@@ -37,11 +34,7 @@ export default async function AdminLoginPage() {
           attempts are rate-limited and logged.
         </p>
 
-        <AdminLoginForm
-          nonce={nonce}
-          captchaRequired={config.captchaRequired}
-          captchaSiteKey={config.captchaSiteKey}
-        />
+        <AdminLoginForm />
 
         <p className="mt-8 text-xs text-muted">
           Not staff? Return to the{" "}

@@ -7,6 +7,7 @@ endpoint cannot be used to enumerate accounts; lockouts are silent.
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import logging
@@ -26,7 +27,7 @@ from app.admin_auth import (
     session_token,
     set_session_cookie,
 )
-from app.captcha import verify_turnstile
+from app import captcha as pow_captcha
 from app import passwords, qr
 from app.config import settings
 from app.security import client_ip, rate_limit
@@ -186,18 +187,38 @@ def _cookie_secure(request: Request) -> bool:
 
 @router.get("/admin/config")
 async def admin_config():
-    """Public bootstrap config: lets the login page render the captcha widget."""
+    """Public bootstrap config for the login page.
+
+    The captcha is self-hosted proof of work: no keys, no third party, and it is
+    always available. `captchaRequired` is therefore always true.
+    """
     return {
-        "captchaRequired": settings.captcha_enforced,
-        "captchaSiteKey": settings.turnstile_site_key or "",
-        "captchaConfigured": bool(
-            settings.turnstile_site_key and settings.turnstile_secret_key
-        ),
-        # OTP is mandatory for every account; the login UI reads this to decide
-        # whether to show the enrolment notice.
+        "captchaRequired": True,
+        "captchaProvider": "pow",
+        "captchaDifficulty": pow_captcha._difficulty(),
         "otpRequired": True,
         "passwordRules": passwords.rules_for_display(),
     }
+
+
+@router.get("/captcha/challenge")
+async def captcha_challenge(request: Request):
+    """Issue a proof-of-work challenge. Public: the login page needs it."""
+    rate_limit(
+        client_ip(request),
+        bucket="captcha_challenge",
+        max_hits=30,
+        window_seconds=60.0,
+        detail="Too many captcha requests. Try again in a minute.",
+    )
+    try:
+        return pow_captcha.issue_challenge(ip=client_ip(request))
+    except RuntimeError:
+        # Saturation is a server problem, not a client error.
+        logger.error("Captcha challenge store is full")
+        raise HTTPException(
+            status_code=503, detail="Captcha temporarily unavailable. Try again shortly."
+        )
 
 
 # --- Authentication ----------------------------------------------------------
@@ -240,12 +261,17 @@ async def admin_login(body: LoginRequest, request: Request, response: Response):
             headers={"Retry-After": str(locked_seconds)},
         )
 
-    captcha_ok = await verify_turnstile(
-        body.captcha_token, remote_ip=ip
+    # Proof of work: the token carries "<challenge>.<nonce>".
+    challenge, _, nonce = (body.captcha_token or "").partition(".")
+    captcha_ok = bool(challenge and nonce) and await asyncio.to_thread(
+        pow_captcha.verify_solution, challenge, nonce, ip=ip
     )
     if not captcha_ok:
         logger.info("Admin login captcha failure from %s", ip)
-        raise HTTPException(status_code=400, detail=GENERIC_LOGIN_ERROR)
+        raise HTTPException(
+            status_code=400,
+            detail="Captcha verification failed. Reload the page and try again.",
+        )
 
     user = await _authenticate(body.email, body.password)
     if user is None:

@@ -7,6 +7,7 @@ cannot be used to spam the inbox or fill the disk.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -17,7 +18,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
-from app.captcha import verify_turnstile
+from app import captcha as pow_captcha
 from app.config import settings
 from app.sanitize import clean_text, sanitize_application
 from app.email_smtp import send_plain_email
@@ -133,11 +134,14 @@ async def apply_for_board_role(
     if role not in ROLE_LABELS:
         raise HTTPException(status_code=400, detail="That role is not open.")
 
-    captcha_ok = await verify_turnstile(body.captcha_token, remote_ip=ip)
+    challenge, _, nonce = (body.captcha_token or "").partition(".")
+    captcha_ok = bool(challenge and nonce) and await asyncio.to_thread(
+        pow_captcha.verify_solution, challenge, nonce, ip=ip
+    )
     if not captcha_ok:
         raise HTTPException(
             status_code=400,
-            detail="Captcha verification failed. Please try again.",
+            detail="Captcha verification failed. Reload the page and try again.",
         )
 
     # Store plain text only: strip control/invisible characters and cap length so

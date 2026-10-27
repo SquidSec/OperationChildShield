@@ -1,28 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { loadTurnstile, TURNSTILE_RENDER_OPTIONS } from "@/lib/turnstile";
-
-interface AdminLoginFormProps {
-  nonce?: string;
-  captchaRequired: boolean;
-  captchaSiteKey: string;
-}
+import { useCallback, useState } from "react";
+import { PowCaptcha } from "@/components/PowCaptcha";
 
 type Step = "credentials" | "otp" | "enrol";
 
 const inputClass =
   "mt-1 w-full rounded-lg border border-card-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-blue focus:ring-2 focus:ring-blue/20";
 
-export function AdminLoginForm({
-  nonce,
-  captchaRequired,
-  captchaSiteKey,
-}: AdminLoginFormProps) {
-  const widgetRef = useRef<HTMLDivElement>(null);
-  const widgetIdRef = useRef<string | null>(null);
+export function AdminLoginForm() {
   const [captchaToken, setCaptchaToken] = useState("");
-  const [captchaError, setCaptchaError] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "submitting">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -34,48 +21,13 @@ export function AdminLoginForm({
   const [secret, setSecret] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
 
-  const captchaEnabled = captchaRequired && Boolean(captchaSiteKey);
-
-  useEffect(() => {
-    if (!captchaEnabled || step !== "credentials") return;
-    let cancelled = false;
-
-    loadTurnstile(nonce)
-      .then((api) => {
-        if (cancelled || !widgetRef.current || widgetIdRef.current) return;
-        widgetIdRef.current = api.render(widgetRef.current, {
-          sitekey: captchaSiteKey,
-          theme: "auto",
-          ...TURNSTILE_RENDER_OPTIONS,
-          callback: (token) => {
-            setCaptchaToken(token);
-            setCaptchaError(null);
-          },
-          "expired-callback": () => setCaptchaToken(""),
-          "error-callback": () => {
-            setCaptchaToken("");
-            setCaptchaError("Captcha could not load. Refresh the page and try again.");
-          },
-        });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCaptchaError("Captcha could not load. Refresh the page and try again.");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [captchaEnabled, captchaSiteKey, nonce, step]);
-
   const onSubmitCredentials = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       setError(null);
 
-      if (captchaEnabled && !captchaToken) {
-        setCaptchaError("Complete the captcha before signing in.");
+      if (!captchaToken) {
+        setError("Wait for the bot check to finish, then continue.");
         return;
       }
 
@@ -116,10 +68,8 @@ export function AdminLoginForm({
           } else {
             setError(detail || "Sign in failed. Check your credentials and try again.");
           }
-          // Turnstile tokens are single-use; get a fresh challenge.
-          if (captchaEnabled && window.turnstile) {
-            window.turnstile.reset(widgetIdRef.current ?? undefined);
-          }
+          // Captcha challenges are single-use; solve a fresh one.
+          // A rejected attempt burns the challenge server-side; solve a fresh one.
           setCaptchaToken("");
           setStatus("idle");
           return;
@@ -147,7 +97,7 @@ export function AdminLoginForm({
         setStatus("idle");
       }
     },
-    [captchaEnabled, captchaToken]
+    [captchaToken]
   );
 
   const onSubmitOtp = useCallback(
@@ -349,17 +299,7 @@ export function AdminLoginForm({
         />
       </div>
 
-      {captchaEnabled ? (
-        <div>
-          <div ref={widgetRef} className="min-h-[65px]" aria-label="Bot verification" />
-          {captchaError && <p className="mt-1 text-xs text-red">{captchaError}</p>}
-        </div>
-      ) : (
-        <p className="rounded-lg border border-card-border bg-surface p-3 text-xs text-muted">
-          Captcha is unavailable because this environment has no Turnstile keys.
-          Login stays disabled until an administrator configures them.
-        </p>
-      )}
+      <PowCaptcha onToken={setCaptchaToken} />
 
       {error && (
         <p role="alert" className="rounded-lg border border-red/40 bg-red/5 p-3 text-sm text-red">
@@ -369,14 +309,14 @@ export function AdminLoginForm({
 
       <button
         type="submit"
-        disabled={status === "submitting" || !captchaEnabled}
+        disabled={status === "submitting" || !captchaToken}
         className="w-full rounded-full bg-blue px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {status === "submitting" ? "Checking…" : "Continue"}
+        {status === "submitting" ? "Checking…" : !captchaToken ? "Waiting for bot check…" : "Continue"}
       </button>
 
       <p className="text-[11px] leading-relaxed text-muted">
-        Protected by Cloudflare Turnstile and a mandatory authenticator code. No
+        Protected by a proof-of-work bot check and a mandatory authenticator code. No
         registration is available; access is granted by an administrator.
       </p>
     </form>

@@ -56,6 +56,12 @@ const nextConfig: NextConfig = {
         source: "/api/board/:path*",
         destination: `${apiBase}/api/board/:path*`,
       },
+      {
+        // Proof-of-work challenges are issued from the login and application
+        // pages, which are same-origin in the browser.
+        source: "/api/captcha/:path*",
+        destination: `${apiBase}/api/captcha/:path*`,
+      },
     ];
   },
   images: {
