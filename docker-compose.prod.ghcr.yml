@@ -26,6 +26,11 @@ services:
       - CONGRESS_NUMBER=${CONGRESS_NUMBER:-119}
       - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-86400}
       - CORS_ORIGINS=${CORS_ORIGINS:-https://operationchildshield.org,https://www.operationchildshield.org}
+      - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-}
+      - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY:-}
+      - ADMIN_CAPTCHA_DISABLED=${ADMIN_CAPTCHA_DISABLED:-false}
+      - ADMIN_SESSION_HOURS=${ADMIN_SESSION_HOURS:-12}
+      - ADMIN_COOKIE_SECURE=${ADMIN_COOKIE_SECURE:-true}
       - ENV=production
       - DISABLE_API_DOCS=1
     volumes:

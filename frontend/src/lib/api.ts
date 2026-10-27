@@ -1,3 +1,4 @@
+import { ApiError } from "./errors";
 import type { MetricsOverview } from "./metrics-types";
 import type { MemberSummary, ReportCard, TrackedBill } from "./types";
 
@@ -25,7 +26,7 @@ async function fetchApi<T>(path: string, timeoutMs = 20_000): Promise<T> {
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`API error ${res.status}: ${body}`);
+      throw new ApiError(res.status, `API error ${res.status}: ${body}`);
     }
 
     return res.json();
@@ -90,6 +91,36 @@ export async function fetchMembersClient(
   return res.json();
 }
 
+export type MemberPage = MembersResponse;
+
+/** One page of the member directory, for sitemap generation. */
+export async function getMembersPage(
+  offset: number,
+  limit = 250
+): Promise<MembersResponse> {
+  return fetchApi(`/api/members?limit=${limit}&offset=${offset}`);
+}
+
+/** Report cards for a small set of members, fetched in parallel. */
+export async function getReportCards(
+  bioguideIds: string[]
+): Promise<{ id: string; card: ReportCard | null; error: string | null }[]> {
+  const results = await Promise.all(
+    bioguideIds.map(async (id) => {
+      try {
+        return { id, card: await getReportCard(id), error: null };
+      } catch (e) {
+        return {
+          id,
+          card: null,
+          error: e instanceof Error ? e.message : "Failed to load voting record",
+        };
+      }
+    })
+  );
+  return results;
+}
+
 export async function getReportCard(bioguideId: string): Promise<ReportCard> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
@@ -102,7 +133,7 @@ export async function getReportCard(bioguideId: string): Promise<ReportCard> {
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`API error ${res.status}: ${body}`);
+      throw new ApiError(res.status, `API error ${res.status}: ${body}`);
     }
 
     return res.json();
@@ -171,7 +202,7 @@ export async function getMetrics(): Promise<MetricsOverview> {
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`API error ${res.status}: ${body}`);
+      throw new ApiError(res.status, `API error ${res.status}: ${body}`);
     }
 
     return normalizeMetricsOverview(await res.json());

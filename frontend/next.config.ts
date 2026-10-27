@@ -32,6 +32,32 @@ const nextConfig: NextConfig = {
       { source: "/analytics", destination: "/", permanent: true },
     ];
   },
+  async rewrites() {
+    const apiBase =
+      process.env.API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:8000";
+    return [
+      {
+        // Session-bearing routes are proxied so their cookies stay first-party
+        // in local dev (production Caddy routes /api/* to the backend already).
+        source: "/api/admin/:path*",
+        destination: `${apiBase}/api/admin/:path*`,
+      },
+      {
+        source: "/api/account/:path*",
+        destination: `${apiBase}/api/account/:path*`,
+      },
+      {
+        source: "/api/alerts/:path*",
+        destination: `${apiBase}/api/alerts/:path*`,
+      },
+      {
+        source: "/api/board/:path*",
+        destination: `${apiBase}/api/board/:path*`,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

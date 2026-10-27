@@ -34,3 +34,12 @@ This is a **public repository**. Production deployment artifacts must stay local
 ### Current production direction
 
 Migrate from the MVP Docker setup to a hardened dedicated production server (Docker Compose + Caddy). See README roadmap Phase 1, item 3.
+
+## Local work: do not fetch external data
+
+When running the app locally to check UI, routes, auth, or layout, **do not pull data from Congress.gov** (or any other external API) unless the task specifically requires verifying that integration.
+
+- Start the backend with `SKIP_BILL_VERIFICATION=1` and avoid endpoints that trigger a live fetch (`/api/members`, `/api/metrics`, report cards) when they are not the thing under test.
+- Prefer the existing cached JSON under `data/`. Do not delete or re-fetch it to "make sure."
+- Use synthetic local data (for example `POST /api/analytics/event` for traffic) when a screen needs rows.
+- Browser checks should exercise the feature under test and stop there. Do not crawl every public page, which triggers Congress.gov calls and burns the shared API rate limit.

@@ -26,15 +26,18 @@ export function StatePerformanceTable({ byState }: StatePerformanceTableProps) {
       ) : (
         <div className="mt-4 overflow-x-auto rounded-[10px] border border-card-border bg-surface shadow-sm">
           <table className="w-full min-w-[720px] border-collapse text-left">
+            <caption className="sr-only">
+              House roll-call totals by state, sorted by policy consistency rate.
+            </caption>
             <thead>
               <tr className="border-b border-card-border bg-surface-muted text-xs font-bold uppercase tracking-wide text-muted">
-                <th className="py-3 pl-4 pr-3">State</th>
-                <th className="py-3 px-3 text-center">Consistency rate</th>
-                <th className="py-3 px-3 text-center">Consistent</th>
-                <th className="py-3 px-3 text-center">Not consistent</th>
-                <th className="py-3 px-3 text-center">Recorded votes</th>
-                <th className="py-3 px-3 text-center">House w/ votes</th>
-                <th className="py-3 pl-3 pr-4 text-center">Participation</th>
+                <th scope="col" className="py-3 pl-4 pr-3">State</th>
+                <th scope="col" className="py-3 px-3 text-center">Consistency rate</th>
+                <th scope="col" className="py-3 px-3 text-center">Consistent</th>
+                <th scope="col" className="py-3 px-3 text-center">Not consistent</th>
+                <th scope="col" className="py-3 px-3 text-center">Recorded votes</th>
+                <th scope="col" className="py-3 px-3 text-center">House w/ votes</th>
+                <th scope="col" className="py-3 pl-3 pr-4 text-center">Participation</th>
               </tr>
             </thead>
             <tbody>

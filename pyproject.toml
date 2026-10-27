@@ -1,0 +1,26 @@
+# Coverage configuration only. Runtime packaging lives in backend/requirements.txt.
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = [
+    "app/__init__.py",
+    # Process entry point: exercised by the container healthcheck, not unit tests.
+    "app/main.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+
+[tool.pytest.ini_options]
+# Canonical config lives in backend/pytest.ini; this keeps `pytest` from the
+# repo root usable without duplicating settings.
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]

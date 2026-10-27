@@ -8,8 +8,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.bill_verification import log_bill_verification
 from app.congress_client import CongressClient
 from app.config import settings
+from app.admin_store import init_admin_db
 from app.analytics_store import init_analytics_db
-from app.routes import analytics, health, involve, members, metrics
+from app.users_store import init_users_db
+from app.routes import (
+    accounts,
+    admin,
+    analytics,
+    board,
+    health,
+    involve,
+    members,
+    metrics,
+    public_api,
+)
 from app.security import SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
@@ -28,12 +40,44 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Analytics database init failed (non-fatal)")
     try:
-        await log_bill_verification(app.state.congress_client)
+        init_admin_db()
+    except Exception:
+        # Login would fail closed; the public site must still serve.
+        logger.exception("Admin database init failed")
+    try:
+        init_users_db()
+    except Exception:
+        logger.exception("User database init failed (non-fatal)")
+    try:
+        from app.observability import configure_logging, init_tracing
+
+        configure_logging()
+        init_tracing(app)
+    except Exception:
+        logger.exception("Observability init failed (non-fatal)")
+    try:
+        if settings.scheduler_enabled:
+            from app.jobs import start_scheduler
+
+            start_scheduler()
+    except Exception:
+        logger.exception("Background scheduler failed to start (non-fatal)")
+    try:
+        if settings.skip_bill_verification:
+            logger.info("Skipping tracked bill verification (SKIP_BILL_VERIFICATION=1)")
+        else:
+            await log_bill_verification(app.state.congress_client)
     except Exception:
         # Non-fatal: verification needs a live Congress.gov and an API key.
         # Failing closed here would turn an upstream hiccup into an outage.
         logger.exception("Tracked bill verification failed at startup (non-fatal)")
     yield
+    try:
+        from app.jobs import stop_scheduler
+
+        stop_scheduler()
+    except Exception:
+        logger.exception("Failed to stop background scheduler")
     await app.state.congress_client.close()
 
 
@@ -65,3 +109,7 @@ app.include_router(members.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
 app.include_router(involve.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
+app.include_router(accounts.router, prefix="/api")
+app.include_router(board.router, prefix="/api")
+app.include_router(public_api.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")

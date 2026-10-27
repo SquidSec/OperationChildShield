@@ -82,7 +82,7 @@ export function ThemeToggle() {
       onClick={toggleTheme}
       aria-label={label}
       title={label}
-      className="inline-flex items-center justify-center gap-2 min-w-[2.75rem] h-10 px-3 rounded-full text-sm font-semibold text-white bg-white/10 border border-white/25 backdrop-blur-sm hover:bg-white/20 hover:border-white/40 transition-colors cursor-pointer"
+      className="theme-toggle inline-flex items-center justify-center gap-2 min-w-[2.75rem] h-10 px-3 rounded-full text-sm font-semibold text-white bg-white/10 border border-white/25 backdrop-blur-sm hover:bg-white/20 hover:border-white/40 transition-colors cursor-pointer"
     >
       {mounted ? (theme === "dark" ? <SunIcon /> : <MoonIcon />) : <MoonIcon />}
       <span className="hidden sm:inline">{theme === "dark" ? "Light" : "Dark"}</span>

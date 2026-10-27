@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -29,10 +30,14 @@ export function SearchBar() {
   }
 
   return (
-    <div className="max-w-[620px] mx-auto mb-8 sm:mb-10">
+    <div className="max-w-[620px] mx-auto mb-6">
       <div className="flex flex-col sm:flex-row shadow-[0_10px_15px_-3px_rgb(0_0_0_/_0.1)] border-2 sm:border-[3px] border-blue rounded-xl overflow-hidden bg-surface">
+        <label htmlFor="member-search" className="sr-only">
+          Search lawmakers by name, state, or city
+        </label>
         <input
-          type="text"
+          id="member-search"
+          type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -48,6 +53,14 @@ export function SearchBar() {
           {isPending ? "Searching..." : "Find Them"}
         </button>
       </div>
+      <p className="mt-2 mb-0 text-center text-sm text-muted">
+        <Link
+          href={search.trim() ? `/search?q=${encodeURIComponent(search.trim())}` : "/search"}
+          className="font-semibold text-red hover:underline"
+        >
+          Search bills and lawmakers →
+        </Link>
+      </p>
     </div>
   );
 }

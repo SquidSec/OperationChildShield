@@ -63,6 +63,58 @@ Gated in [`frontend/src/lib/feature-flags.ts`](frontend/src/lib/feature-flags.ts
 | `POST /api/involve` | Volunteer/advocate signup (JSON body; stored as JSONL under `CACHE_DIR`) |
 | `POST /api/analytics/event` | Records a page view, or an allow-listed action (`share`, `contact_congress`), into server-side SQLite (`analytics.db`). Raw events are not exposed. |
 | `GET /api/impact` | Aggregate counts only: page views, shares, Congress contacts started, and signups. |
+| `GET /api/admin/config` | Public bootstrap config for the admin login (whether a captcha is required and its public site key). |
+| `POST /api/admin/login` | Admin sign in. Requires a Cloudflare Turnstile token; sets an HttpOnly session cookie. |
+| `POST /api/admin/logout` | Destroys the current admin session. |
+| `GET /api/admin/me` | Current admin identity. |
+| `GET /api/admin/traffic?days=N` | Admin-only traffic aggregates: daily views, top pages, referrer domains, engagement actions. |
+| `GET /api/admin/users` | Admin-only list of seeded accounts (no hashes). |
+
+### Admin section (`/admin`)
+
+A private traffic dashboard for staff. There is **no registration**: accounts are seeded, passwords are stored as scrypt hashes, and sessions live in `admin.db` as SHA-256 token digests behind an HttpOnly, `SameSite=Strict` cookie.
+
+1. Create a Cloudflare Turnstile widget for your domain and set `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`. Login **fails closed** until the secret is configured (`ADMIN_CAPTCHA_DISABLED=true` skips enforcement for local development only).
+
+   **OTP is mandatory.** Sign-in is two steps: password (plus captcha) then a
+   6-digit authenticator code. A new account shows a **QR code** and setup key at
+   first sign-in, plus eight single-use recovery codes once the first code is
+   confirmed. An account counts as enrolled only after a person confirms a code,
+   so there is no way to skip setup. There is no setting to disable OTP;
+   `scripts/seed_admin.py reset-otp EMAIL` clears it so the account re-enrols.
+
+   **Passwords follow NIST SP 800-63B**: at least 15 characters, any characters
+   (including spaces), no composition rules, and rejection of breached/common
+   passwords, the organization name, and the account's email local part.
+2. Seed an account:
+
+   ```bash
+   cd backend
+   CACHE_DIR=../data python ../scripts/seed_admin.py add you@example.org --name "Your Name"
+   ```
+
+   The password is read from `ADMIN_PASSWORD`, otherwise prompted. Use `list`,
+   `disable`, `enable`, and `reset-otp` to manage accounts; disabling also
+   revokes that account's sessions.
+3. Set `ADMIN_COOKIE_SECURE=true` in production and `ADMIN_SESSION_HOURS` to the session lifetime you want (default 12).
+
+If sign-in is refused, check whether the account is temporarily locked:
+
+```bash
+CACHE_DIR=./data python3 scripts/seed_admin.py status you@example.org
+CACHE_DIR=./data python3 scripts/seed_admin.py unlock you@example.org
+```
+
+Lockout fires after `ADMIN_LOCKOUT_THRESHOLD` failed passwords (default 5) for
+`ADMIN_LOCKOUT_MINUTES` (default 15) and returns an explicit "account is locked"
+message with a `Retry-After` header.
+
+Login is rate-limited per IP and per account, OTP challenges are single-use and
+expire after five minutes with a five-attempt cap, and failures return one
+generic message. The dashboard shows aggregates only, and admin page views are
+excluded from the metrics. Board applications appear on `/admin` and at
+`/admin/applications`; applicant text is stored and rendered as plain text.
+
 
 Interactive API docs: `http://localhost:8000/docs` (local).
 

@@ -30,14 +30,34 @@ function connectSrcDirective(isDev: boolean): string {
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const isDev = process.env.NODE_ENV === "development";
+  const pathname = request.nextUrl.pathname;
+
+  // Admin pages are not public. Check for the session cookie here to avoid
+  // rendering the dashboard shell; the page still validates it with the API.
+  if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
+    if (!request.cookies.get("ocs_admin_session")?.value) {
+      const loginUrl = new URL("/admin/login", request.url);
+      const response = NextResponse.redirect(loginUrl);
+      response.headers.set("Cache-Control", "no-store");
+      return response;
+    }
+  }
 
   // Donorbox's custom element injects its own <style> tags into shadow DOM and a
   // stylesheet from rsms.me. Injected styles cannot carry our nonce, so that route
   // drops the style nonce in favor of 'unsafe-inline'; every other route keeps it.
   const isDonate = request.nextUrl.pathname.startsWith("/donate");
+  // Cloudflare Turnstile loads its widget script and injects its own styles,
+  // which cannot carry our nonce. Routes with a captcha (admin login, the board
+  // application form) allow inline styles; every other route keeps the nonce.
+  const isAdminLogin = request.nextUrl.pathname.startsWith("/admin/login");
+  const hasCaptcha =
+    isAdminLogin || request.nextUrl.pathname.startsWith("/board/apply");
   const styleSrc = isDonate
     ? "style-src 'self' 'unsafe-inline' https://rsms.me https://donorbox.org"
-    : `style-src 'self' 'nonce-${nonce}'`;
+    : hasCaptcha
+      ? "style-src 'self' 'unsafe-inline' https://challenges.cloudflare.com"
+      : `style-src 'self' 'nonce-${nonce}'`;
 
   const csp = [
     "default-src 'self'",
@@ -49,9 +69,13 @@ export function proxy(request: NextRequest) {
     `img-src 'self' data: blob: https://www.congress.gov${isDonate ? " https://donorbox.org" : ""}`,
     `font-src 'self' data:${isDonate ? " https://rsms.me" : ""}`,
     styleSrc,
-    "style-src-attr 'unsafe-inline'",
+    // Turnstile sets inline styles on its container, so captcha routes rely on
+    // style-src above; other routes keep attribute styles for React props.
+    ...(hasCaptcha ? [] : ["style-src-attr 'unsafe-inline'"]),
     // Nonce + strict-dynamic: no 'unsafe-inline'. Dev-only eval for React refresh.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    // Turnstile's script carries the request nonce (see app/admin/login/page.tsx);
+    // strict-dynamic lets it load the scripts it needs in turn.
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
     isDonate
       ? `${connectSrcDirective(isDev).replace("connect-src ", "connect-src https://donorbox.org ")}`
       : connectSrcDirective(isDev),
@@ -59,6 +83,7 @@ export function proxy(request: NextRequest) {
     ...(isDonate
       ? ["frame-src https://donorbox.org https://js.stripe.com https://www.paypal.com"]
       : []),
+    ...(hasCaptcha ? ["frame-src https://challenges.cloudflare.com"] : []),
     "upgrade-insecure-requests",
   ]
     .join("; ")
@@ -77,6 +102,11 @@ export function proxy(request: NextRequest) {
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  if (pathname.startsWith("/admin")) {
+    // Defense in depth alongside robots.ts and per-page metadata.
+    response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    response.headers.set("Cache-Control", "no-store");
+  }
   response.headers.set(
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=()",

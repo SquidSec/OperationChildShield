@@ -132,3 +132,116 @@ body {
 .dark footer {
   background-color: #1e3a8a;
 }
+
+/* Visible keyboard focus for every interactive element. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--blue-light);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip-link target and print: keep the page readable on paper. */
+@media print {
+  :root {
+    --background: #ffffff;
+    --foreground: #000000;
+    --muted: #333333;
+    --surface: #ffffff;
+    --surface-muted: #ffffff;
+    --card-border: #999999;
+    --red: #7f1d1d;
+    --blue: #1e3a8a;
+  }
+
+  .dark {
+    color-scheme: light;
+    --background: #ffffff;
+    --foreground: #000000;
+    --muted: #333333;
+    --surface: #ffffff;
+    --surface-muted: #ffffff;
+    --card-border: #999999;
+    --red: #7f1d1d;
+    --blue: #1e3a8a;
+  }
+
+  /* Chrome that carries no record value on paper. */
+  .hero-header,
+  .ncmec-banner,
+  .nonprofit-badge,
+  .theme-toggle,
+  .site-footer,
+  [data-print="hide"],
+  nav[aria-label="Social media"] {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+  }
+
+  .page-container {
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  main {
+    padding: 0;
+  }
+
+  a[href]::after {
+    content: "";
+  }
+
+  /* Never break a vote row across pages. */
+  tr,
+  .vote-row,
+  li {
+    break-inside: avoid;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+  }
+
+  th,
+  td {
+    padding: 4px 6px !important;
+    border-bottom: 1px solid #999999;
+    color: #000000;
+    background: #ffffff !important;
+  }
+
+  thead th {
+    border-bottom: 2px solid #000000;
+  }
+
+  /* Vote pills stay legible in black and white. */
+  .vote-yes,
+  .vote-no,
+  .vote-neutral,
+  .dark .vote-yes,
+  .dark .vote-no,
+  .dark .vote-neutral {
+    background: transparent !important;
+    color: #000000 !important;
+    border: 1px solid #000000;
+  }
+
+  .overflow-x-auto,
+  .scroll-x-pane {
+    overflow: visible !important;
+  }
+
+  h1,
+  h2,
+  h3 {
+    color: #000000 !important;
+    break-after: avoid;
+  }
+}

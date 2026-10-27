@@ -59,7 +59,11 @@ def init_analytics_db() -> None:
                     path TEXT NOT NULL,
                     viewed_at TEXT NOT NULL,
                     referrer TEXT,
-                    user_agent TEXT
+                    user_agent TEXT,
+                    -- Automated traffic is stored, not discarded, so filtering can
+                    -- be audited and rules can be re-run over history.
+                    is_bot INTEGER NOT NULL DEFAULT 0,
+                    bot_reason TEXT NOT NULL DEFAULT ''
                 )
                 """
             )
@@ -82,11 +86,21 @@ def init_analytics_db() -> None:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_action_events_name ON action_events(name)"
             )
+            _migrate_page_view_columns(conn)
             conn.commit()
             _initialized = True
         finally:
             conn.close()
         _harden_db_file()
+
+
+def _migrate_page_view_columns(conn: sqlite3.Connection) -> None:
+    """Add bot columns to databases created before filtering existed."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(page_views)")}
+    if "is_bot" not in existing:
+        conn.execute("ALTER TABLE page_views ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0")
+    if "bot_reason" not in existing:
+        conn.execute("ALTER TABLE page_views ADD COLUMN bot_reason TEXT NOT NULL DEFAULT ''")
 
 
 def ensure_initialized() -> None:
@@ -145,6 +159,8 @@ def record_page_view(
     referrer: str | None = None,
     user_agent: str | None = None,
     viewed_at: datetime | None = None,
+    is_bot: bool = False,
+    bot_reason: str = "",
 ) -> None:
     ensure_initialized()
     clean_path = (path or "/").strip() or "/"
@@ -163,10 +179,11 @@ def record_page_view(
         try:
             conn.execute(
                 """
-                INSERT INTO page_views (path, viewed_at, referrer, user_agent)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO page_views
+                    (path, viewed_at, referrer, user_agent, is_bot, bot_reason)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (clean_path, iso, ref, ua),
+                (clean_path, iso, ref, ua, 1 if is_bot else 0, (bot_reason or "")[:40]),
             )
             conn.commit()
             _maybe_prune(conn)
@@ -231,6 +248,231 @@ def record_action(
     return True
 
 
+def _traffic_since(days: int) -> datetime:
+    return datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 365)))
+
+
+def _referrer_domain(referrer: str | None) -> str | None:
+    if not referrer:
+        return None
+    from urllib.parse import urlsplit
+
+    try:
+        host = urlsplit(referrer).hostname or ""
+    except ValueError:
+        return None
+    host = host.lower().lstrip(".")
+    if not host or host.startswith("localhost"):
+        return None
+    # Collapse our own pages into one bucket so internal navigation is obvious.
+    if host.endswith("operationchildshield.org"):
+        return "operationchildshield.org"
+    return host[:120]
+
+
+# Admin pages are excluded from visitor metrics. These are complete literal
+# queries (no interpolation) so query text can never include request input.
+_COUNT_VIEWS_SQL = (
+    "SELECT COUNT(*) FROM page_views "
+    "WHERE viewed_at >= ? AND path NOT LIKE '/admin%' AND is_bot = 0"
+)
+_COUNT_PREVIOUS_VIEWS_SQL = (
+    "SELECT COUNT(*) FROM page_views "
+    "WHERE viewed_at >= ? AND viewed_at < ? AND path NOT LIKE '/admin%' AND is_bot = 0"
+)
+_DAILY_VIEWS_SQL = (
+    "SELECT substr(viewed_at, 1, 10) AS day, COUNT(*) AS views "
+    "FROM page_views WHERE viewed_at >= ? AND path NOT LIKE '/admin%' AND is_bot = 0 "
+    "GROUP BY day ORDER BY day ASC"
+)
+_TOP_PAGES_SQL = (
+    "SELECT path, COUNT(*) AS views FROM page_views "
+    "WHERE viewed_at >= ? AND path NOT LIKE '/admin%' AND is_bot = 0 "
+    "GROUP BY path ORDER BY views DESC, path ASC LIMIT 10"
+)
+_REFERRERS_SQL = (
+    "SELECT referrer, COUNT(*) AS views FROM page_views "
+    "WHERE viewed_at >= ? AND path NOT LIKE '/admin%' AND is_bot = 0 "
+    "AND referrer IS NOT NULL AND referrer != '' GROUP BY referrer"
+)
+_COUNT_BOTS_SQL = (
+    "SELECT COUNT(*) FROM page_views "
+    "WHERE viewed_at >= ? AND path NOT LIKE '/admin%' AND is_bot = 1"
+)
+_BOT_REASON_SQL = (
+    "SELECT bot_reason, COUNT(*) AS count FROM page_views "
+    "WHERE viewed_at >= ? AND path NOT LIKE '/admin%' AND is_bot = 1 "
+    "GROUP BY bot_reason ORDER BY count DESC"
+)
+_ACTION_COUNTS_SQL = (
+    "SELECT name, COUNT(*) AS count FROM action_events "
+    "WHERE created_at >= ? GROUP BY name"
+)
+
+
+def get_traffic_overview(days: int = 30) -> dict[str, object]:
+    """Aggregate traffic for the admin dashboard. Never returns raw rows."""
+    days = max(1, min(int(days or 30), 365))
+    since = _traffic_since(days).isoformat()
+    ensure_initialized()
+
+    with _lock:
+        conn = _connect()
+        try:
+            total_views = int(conn.execute(_COUNT_VIEWS_SQL, (since,)).fetchone()[0])
+            previous_since = (datetime.now(timezone.utc) - timedelta(days=days * 2)).isoformat()
+            previous_views = int(
+                conn.execute(
+                    _COUNT_PREVIOUS_VIEWS_SQL, (previous_since, since)
+                ).fetchone()[0]
+            )
+
+            daily = {
+                row["day"]: int(row["views"])
+                for row in conn.execute(_DAILY_VIEWS_SQL, (since,)).fetchall()
+            }
+
+            top_pages = [
+                {"path": row["path"], "views": int(row["views"])}
+                for row in conn.execute(_TOP_PAGES_SQL, (since,)).fetchall()
+            ]
+
+            referrers: dict[str, int] = {}
+            for row in conn.execute(_REFERRERS_SQL, (since,)).fetchall():
+                domain = _referrer_domain(row["referrer"])
+                if domain:
+                    referrers[domain] = referrers.get(domain, 0) + int(row["views"])
+            top_referrers = [
+                {"domain": domain, "views": views}
+                for domain, views in sorted(
+                    referrers.items(), key=lambda item: (-item[1], item[0])
+                )[:10]
+            ]
+
+            actions = {
+                row["name"]: int(row["count"])
+                for row in conn.execute(_ACTION_COUNTS_SQL, (since,)).fetchall()
+            }
+
+            # Filtered traffic is reported, not hidden, so the filter is auditable.
+            bot_total = int(
+                conn.execute(_COUNT_BOTS_SQL, (since,)).fetchone()[0]
+            )
+            bot_reasons = [
+                {"reason": row["bot_reason"] or "unknown", "count": int(row["count"])}
+                for row in conn.execute(_BOT_REASON_SQL, (since,)).fetchall()
+            ]
+
+            return {
+                "days": days,
+                "since": since,
+                "generatedAt": datetime.now(timezone.utc).isoformat(),
+                "pageViews": total_views,
+                "botPageViews": bot_total,
+                "botReasons": bot_reasons,
+                "previousPageViews": previous_views,
+                "daily": [
+                    {"date": day, "views": daily.get(day, 0)}
+                    for day in _date_range(days)
+                ],
+                "topPages": top_pages,
+                "topReferrers": top_referrers,
+                "actions": {
+                    "share": int(actions.get("share", 0)),
+                    "contactCongress": int(actions.get("contact_congress", 0)),
+                    "signups": int(actions.get("involve_signup", 0)),
+                },
+            }
+        finally:
+            conn.close()
+
+
+def _date_range(days: int) -> list[str]:
+    today = datetime.now(timezone.utc).date()
+    return [
+        (today - timedelta(days=offset)).isoformat()
+        for offset in range(days - 1, -1, -1)
+    ]
+
+
+def reclassify_page_views(batch: int = 5000) -> dict[str, int]:
+    """Re-run the bot classifier over stored human rows.
+
+    Widening the rules should apply to history, otherwise old bot traffic keeps
+    inflating the numbers until it ages out. Only rows currently counted as human
+    are considered; an existing bot row keeps its original classification.
+    """
+    from app.bot_filter import classify
+
+    ensure_initialized()
+    promoted = 0
+    checked = 0
+    with _lock:
+        conn = _connect()
+        try:
+            rows = conn.execute(
+                "SELECT id, user_agent FROM page_views WHERE is_bot = 0 LIMIT ?",
+                (max(1, batch),),
+            ).fetchall()
+            updates: list[tuple[str, int]] = []
+            for row in rows:
+                checked += 1
+                verdict = classify(row["user_agent"], headers=None)
+                if verdict.is_bot:
+                    updates.append((verdict.reason, int(row["id"])))
+            if updates:
+                conn.executemany(
+                    "UPDATE page_views SET is_bot = 1, bot_reason = ? WHERE id = ?",
+                    updates,
+                )
+                promoted = len(updates)
+            conn.commit()
+        finally:
+            conn.close()
+    if promoted:
+        logger.info("Reclassified page views as bots: %s of %s", promoted, checked)
+    return {"checked": checked, "promoted": promoted}
+
+
+def prune_expired_now() -> dict[str, int]:
+    """Run retention pruning on demand (used by the background scheduler)."""
+    ensure_initialized()
+    with _lock:
+        conn = _connect()
+        try:
+            cutoff = _retention_cutoff()
+            if cutoff is None:
+                return {"page_views": 0, "action_events": 0}
+            views = conn.execute("DELETE FROM page_views WHERE viewed_at < ?", (cutoff,)).rowcount
+            actions = conn.execute(
+                "DELETE FROM action_events WHERE created_at < ?", (cutoff,)
+            ).rowcount
+            conn.commit()
+            if views or actions:
+                logger.info("Scheduled prune: page_views=%s action_events=%s", views, actions)
+            return {"page_views": int(views), "action_events": int(actions)}
+        finally:
+            conn.close()
+
+
+def storage_stats() -> dict[str, object]:
+    """Row counts and the oldest retained timestamp, for the admin health panel."""
+    ensure_initialized()
+    with _lock:
+        conn = _connect()
+        try:
+            views = int(conn.execute("SELECT COUNT(*) FROM page_views").fetchone()[0])
+            actions = int(conn.execute("SELECT COUNT(*) FROM action_events").fetchone()[0])
+            oldest = conn.execute("SELECT MIN(viewed_at) FROM page_views").fetchone()[0]
+            return {
+                "pageViewRows": views,
+                "actionEventRows": actions,
+                "oldestPageView": oldest,
+            }
+        finally:
+            conn.close()
+
+
 def get_impact_counts() -> dict[str, int | str]:
     ensure_initialized()
     with _lock:
@@ -255,4 +497,3 @@ def get_impact_counts() -> dict[str, int | str]:
             }
         finally:
             conn.close()
-
