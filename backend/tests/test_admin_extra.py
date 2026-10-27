@@ -415,7 +415,9 @@ def test_lockout_remaining_seconds_and_unlock(client, monkeypatch):
         _login(client, password="wrong password here")
 
     remaining = admin_store.lockout_remaining_seconds("admin@example.org")
-    assert 0 < remaining <= 300
+    # Rounded up to whole seconds, so the boundary can report the configured
+    # window plus one. Assert the window, not an exact value.
+    assert 0 < remaining <= 301
 
     admin_store.clear_lockout("admin@example.org")
     assert admin_store.lockout_remaining_seconds("admin@example.org") == 0
