@@ -97,6 +97,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Trivy filesystem scan (config + secrets)
+        id: trivy
+        # The action downloads the Trivy binary and its vulnerability DB from
+        # github.com on every run. On this self-hosted pool that download
+        # intermittently stalls for the full setup timeout and fails with exit
+        # code 6 before any scan happens, which is an infrastructure failure
+        # rather than a finding. Retry a couple of times, then fail the job.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        continue-on-error: true
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Retry Trivy (setup download failure)
+        if: steps.trivy.outcome == 'failure'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
