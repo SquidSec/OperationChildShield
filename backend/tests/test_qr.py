@@ -79,31 +79,73 @@ def test_svg_geometry_only_from_matrix():
 @pytest.mark.parametrize(
     "payload",
     [
-        "HELLO",
+        # Lowercase/symbols force byte mode in the reference library too. For
+        # uppercase-only text (e.g. "HELLO") the reference picks alphanumeric
+        # mode, which is a different but equally valid encoding, so comparing
+        # modules would be meaningless.
+        "hello",
         URI,
         "x" * 120,
     ],
 )
 def test_matches_reference_implementation(payload):
-    """Cell-for-cell comparison against the `qrcode` library when installed.
+    """Compare against the `qrcode` reference for any of the 8 valid masks.
 
-    The encoder is hand-rolled, so structural checks alone are not enough; a
-    mask or interleaving mistake still yields a plausible-looking grid.
+    The mask pattern is an implementation choice: several masks are equally
+    correct and produce different grids, all decodable. Requiring one specific
+    mask would fail a correct encoder, so we accept a match under any mask and
+    require an exact cell match for at least one. A mistake in the data
+    encoding, error correction, or interleaving still shows up as a mismatch
+    under every mask.
     """
     qrcode = pytest.importorskip("qrcode")
     from qrcode.constants import ERROR_CORRECT_M
 
-    ref = qrcode.QRCode(error_correction=ERROR_CORRECT_M, border=0)
-    ref.add_data(payload)
-    ref.make(fit=True)
-    reference = ref.get_matrix()
     mine = qr.qr_matrix(payload)
+    assert (len(mine) - 17) % 4 == 0 and len(mine) == len(mine[0])
 
-    assert len(reference) == len(mine), "version mismatch"
-    diffs = sum(
-        1
-        for y in range(len(mine))
-        for x in range(len(mine))
-        if bool(reference[y][x]) != mine[y][x]
+    best = None
+    for mask in range(8):
+        ref = qrcode.QRCode(error_correction=ERROR_CORRECT_M, border=0, mask_pattern=mask)
+        ref.add_data(payload)
+        ref.make(fit=True)
+        reference = ref.get_matrix()
+        if len(reference) != len(mine):
+            return pytest.fail(
+                f"version mismatch: reference {len(reference)} vs ours {len(mine)}"
+            )
+        diffs = sum(
+            1
+            for y in range(len(mine))
+            for x in range(len(mine))
+            if bool(reference[y][x]) != mine[y][x]
+        )
+        if best is None or diffs < best[1]:
+            best = (mask, diffs)
+        if diffs == 0:
+            return
+
+    assert best is not None
+    pytest.fail(
+        f"no mask matched the reference (closest: mask {best[0]} with {best[1]} "
+        "differing modules)"
     )
-    assert diffs == 0, f"{diffs} differing modules"
+
+
+def test_matrix_decodes_to_the_original_payload():
+    """End-to-end proof: the grid actually scans back to the input.
+
+    Uses OpenCV when available (CI installs it via requirements-dev); skipped
+    otherwise so the suite does not require a heavy dependency locally.
+    """
+    np = pytest.importorskip("numpy")
+    cv2 = pytest.importorskip("cv2")
+
+    png = qr.qr_matrix("HELLO")
+    image = np.where(np.array(png), 0, 255).astype(np.uint8)
+    image = np.pad(image, 4, constant_values=255)
+    image = cv2.resize(image, None, fx=10, fy=10, interpolation=cv2.INTER_NEAREST)
+
+    detector = cv2.QRCodeDetector()
+    decoded, _points, _ = detector.detectAndDecode(image)
+    assert decoded == "HELLO"
