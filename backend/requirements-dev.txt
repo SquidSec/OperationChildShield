@@ -7,6 +7,6 @@ pytest-cov==7.1.0
 pre-commit==4.7.0
 # Reference implementation used to cross-check app/qr.py in tests.
 qrcode==8.2
-# Used by tests/test_qr.py to prove the generated grid scans back.
-opencv-python-headless==5.0.0.93
-numpy==2.5.4
+# The QR round-trip test (tests/test_qr.py) uses OpenCV when present but is
+# skipped otherwise. It is deliberately NOT a dependency: the wheel is ~61 MB
+# and dominated CI install time for one assertion.
