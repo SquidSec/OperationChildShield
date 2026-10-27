@@ -21,10 +21,10 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            backend/requirements.txt
-            backend/requirements-dev.txt
+          # No pip cache: the post-job upload took ~10 minutes on this pool,
+          # longer than installing (~25s) from a warm local index. The runners
+          # are persistent, so pip's on-disk cache already helps between runs.
+          cache: ""
 
       - name: Install dependencies
         run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
@@ -40,8 +40,10 @@ jobs:
         # --cov=app resolves the source via backend/app; the coverage config
         # (omit main.py, branch mode) lives in the repo-root pyproject.toml, which
         # coverage only discovers via an explicit --cov-config from this cwd.
+        # -n auto parallelises across cores: 36s -> 13s locally, and this is the
+        # single longest step on a loaded runner.
         run: |
-          python -m pytest -q --tb=short \
+          python -m pytest -q --tb=short -n auto \
             --cov=app --cov-config=../pyproject.toml \
             --cov-report=term-missing --cov-fail-under=70
 
@@ -56,14 +58,10 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Cache frontend npm
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: frontend/node_modules
-          key: ${{ runner.os }}-node24-${{ hashFiles('frontend/package-lock.json', 'frontend/package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node24-
-
+      # Do NOT cache frontend/node_modules here. It is ~530 MB, and on this
+      # self-hosted pool the archive round-trip cost 4 minutes to restore and 4
+      # minutes to save - 8 of the job's 10 minutes - to avoid a ~60 second
+      # install. npm's own HTTP cache (below) is small and already local.
       - name: Install dependencies
         working-directory: frontend
         run: |
@@ -78,11 +76,9 @@ jobs:
         run: npm audit --audit-level=moderate
         continue-on-error: true
 
-      - name: Run Vitest
-        working-directory: frontend
-        run: npm test
-
-      - name: Run Vitest (coverage)
+      # One run produces the tests and the coverage gate; the previous split ran
+      # Vitest twice for no benefit.
+      - name: Vitest (with coverage thresholds)
         working-directory: frontend
         run: npm run test:coverage
 

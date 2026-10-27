@@ -4,6 +4,8 @@ httpx==0.28.1
 pip-audit==2.10.1
 bandit==1.9.4
 pytest-cov==7.1.0
+# Parallel test execution: 36s -> 13s locally, more on loaded CI runners.
+pytest-xdist==3.8.0
 pre-commit==4.7.0
 # Reference implementation used to cross-check app/qr.py in tests.
 qrcode==8.2
