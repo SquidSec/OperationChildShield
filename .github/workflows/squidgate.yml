@@ -22,7 +22,7 @@ jobs:
 
       - name: SquidGate
         if: env.LLM_API_KEY != ''
-        uses: SquidSec/SquidGate@ce770e7abe7752c4b1579ecd5dd06d9d06f3626c # v1.0.0-build.22
+        uses: SquidSec/SquidGate@bfc3a29742a3d6a121f9e6b9662260d704d71b8e # v1.0.0-build.22
         with:
           llm-api-key: ${{ env.LLM_API_KEY }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
