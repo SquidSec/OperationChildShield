@@ -86,7 +86,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   };
 
   return (
-    <div className="page-container py-8 min-w-0">
+    <div className="page-container py-6 min-w-0 sm:py-8">
       <Suspense
         fallback={
           <div className="h-[72px] max-w-[620px] mx-auto mb-10 bg-surface/50 rounded-xl animate-pulse" />
@@ -102,7 +102,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         Eligible members who sat out a vote appear as &quot;Not Voting.&quot;
       </p>
 
-      <PolicyLegend className="mb-8" />
+      <PolicyLegend className="mb-6 sm:mb-8" />
 
       <Suspense fallback={<div className="h-20 mb-8 bg-surface/50 rounded-xl animate-pulse" />}>
         <MemberFiltersBar />
