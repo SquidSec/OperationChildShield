@@ -270,7 +270,7 @@ export default async function MemberPage({ params }: MemberPageProps) {
         reportUrl={getReportPageUrl(card.bioguide_id)}
       />
 
-      <section className="mt-8">
+      <section id="recorded-votes" className="mt-8 scroll-mt-4">
         <h2 className="mb-2 text-xl font-bold text-blue">Every vote we track</h2>
         <PolicyLegend className="mb-4 justify-start" />
         <div className="rounded-[10px] border border-card-border bg-surface p-4 shadow-[0_6px_12px_-2px_rgb(0_0_0_/_0.1)] sm:p-5">

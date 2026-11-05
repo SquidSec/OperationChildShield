@@ -159,9 +159,13 @@ export function PoliticianCard({ member, loadVotes = true }: PoliticianCardProps
 
       <div className="flex min-h-0 flex-1 flex-col p-5">
         <div className="mt-1 flex min-h-0 flex-1 flex-col overflow-hidden text-[0.9rem]">
-          <strong className="block my-2 mb-2.5 text-red text-[0.85rem]">
+          {/* Red + bold reads as a link on this site, so it has to be one. */}
+          <Link
+            href={`/member/${member.bioguideId}#recorded-votes`}
+            className="my-2 mb-2.5 block w-fit text-[0.85rem] font-bold uppercase tracking-wide text-red no-underline hover:underline focus-visible:underline"
+          >
             RECORDED VOTES
-          </strong>
+          </Link>
           {!loading && loadFailed && !report && (
             <div className="text-muted text-sm py-2 px-3 bg-surface-muted rounded-md border-l-4 border-red">
               Voting record unavailable right now. Open the full record to try again.
