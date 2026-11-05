@@ -154,7 +154,13 @@ def test_default_jobs_are_registered_on_start():
         "send_alerts",
         "verify_bills",
         "reclassify_traffic",
+        "daily_brief",
     }
+
+
+def test_daily_brief_is_skipped_when_newswire_disabled(monkeypatch):
+    monkeypatch.setattr(jobs.settings, "newswire_enabled", False)
+    assert jobs._daily_brief() == "disabled"
 
 
 def test_verify_bills_skips_when_flagged():

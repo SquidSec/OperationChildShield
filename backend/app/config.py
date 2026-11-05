@@ -82,6 +82,21 @@ class Settings(BaseSettings):
     log_json: bool = False
     csp_report_uri: str = ""
 
+    # --- Daily Brief newswire -------------------------------------------------
+    # News collection and original article writing. Disabled by default so a
+    # deployment without a model key never makes outbound calls or publishes
+    # unreviewed text. Set NEWSWIRE_ENABLED=1 plus a key to turn it on.
+    newswire_enabled: bool = False
+    newswire_collect_hours: float = 24.0
+    newswire_max_articles_per_run: int = 3
+    newswire_min_items: int = 3
+    # OpenAI-compatible chat completions endpoint (xAI, OpenRouter, or a local
+    # server). Pointing this at a self-hosted model needs no code change.
+    llm_base_url: str = "https://api.x.ai/v1"
+    llm_model: str = "grok-4"
+    llm_api_key: str = ""
+    llm_timeout_seconds: float = 120.0
+
     # --- Backups --------------------------------------------------------------
     backup_dir: str = ""
     backup_keep: int = 7
@@ -123,6 +138,11 @@ class Settings(BaseSettings):
     @property
     def smtp_configured(self) -> bool:
         return bool(self.smtp_host and self.smtp_user and self.smtp_password)
+
+    @property
+    def newswire_configured(self) -> bool:
+        """Collection needs no key; article writing does."""
+        return bool(self.newswire_enabled and self.llm_api_key and self.llm_base_url)
 
     @property
     def trusted_proxy_networks(self) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:

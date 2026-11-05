@@ -165,7 +165,7 @@ export function PoliticianGrid({
         {isSearch
           ? countMessage
           : activeFilterLabel
-            ? `${countMessage}${total > members.length ? " Scroll down to load more." : "."}`
+            ? `${countMessage}${total > members.length ? " Scroll down to load more." : ""}`
             : total > members.length
               ? `Showing ${members.length} of ${total} members. Scroll down to load more. Search by name or state to find a specific representative.`
               : `Showing all ${total} member${total === 1 ? "" : "s"}.`}
