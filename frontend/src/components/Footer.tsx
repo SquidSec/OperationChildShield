@@ -15,6 +15,12 @@ export function Footer() {
         <Link href="/" className="underline hover:opacity-100">
           Find Lawmakers
         </Link>
+        <Link href="/news" className="underline hover:opacity-100">
+          The Daily Brief
+        </Link>
+        <Link href="/take-action" className="underline hover:opacity-100">
+          Take Action
+        </Link>
         <a href="/metrics" className="underline hover:opacity-100">
           See the Numbers
         </a>

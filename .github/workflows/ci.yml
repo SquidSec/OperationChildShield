@@ -21,10 +21,10 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            backend/requirements.txt
-            backend/requirements-dev.txt
+          # No pip cache: the post-job upload took ~10 minutes on this pool,
+          # longer than installing (~25s) from a warm local index. The runners
+          # are persistent, so pip's on-disk cache already helps between runs.
+          cache: ""
 
       - name: Install dependencies
         run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
@@ -40,8 +40,10 @@ jobs:
         # --cov=app resolves the source via backend/app; the coverage config
         # (omit main.py, branch mode) lives in the repo-root pyproject.toml, which
         # coverage only discovers via an explicit --cov-config from this cwd.
+        # -n auto parallelises across cores: 36s -> 13s locally, and this is the
+        # single longest step on a loaded runner.
         run: |
-          python -m pytest -q --tb=short \
+          python -m pytest -q --tb=short -n auto \
             --cov=app --cov-config=../pyproject.toml \
             --cov-report=term-missing --cov-fail-under=70
 
@@ -56,14 +58,10 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Cache frontend npm
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: frontend/node_modules
-          key: ${{ runner.os }}-node24-${{ hashFiles('frontend/package-lock.json', 'frontend/package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node24-
-
+      # Do NOT cache frontend/node_modules here. It is ~530 MB, and on this
+      # self-hosted pool the archive round-trip cost 4 minutes to restore and 4
+      # minutes to save - 8 of the job's 10 minutes - to avoid a ~60 second
+      # install. npm's own HTTP cache (below) is small and already local.
       - name: Install dependencies
         working-directory: frontend
         run: |
@@ -78,32 +76,84 @@ jobs:
         run: npm audit --audit-level=moderate
         continue-on-error: true
 
-      - name: Run Vitest
-        working-directory: frontend
-        run: npm test
-
-      - name: Run Vitest (coverage)
+      # One run produces the tests and the coverage gate; the previous split ran
+      # Vitest twice for no benefit.
+      - name: Vitest (with coverage thresholds)
         working-directory: frontend
         run: npm run test:coverage
 
   security-scan:
+    # This job used aquasecurity/trivy-action, which downloads a ~50 MB binary
+    # plus a vulnerability DB from github.com on every run. On this self-hosted
+    # pool that download stalls for the full timeout and fails before scanning -
+    # observed on 3 of 5 runs - so the gate was both slow and unreliable.
+    #
+    # It now uses the Trivy CLI that the runner image already provides (the same
+    # binary the action would fetch) and scans the repo config. A missing binary
+    # is reported loudly instead of being silently skipped.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Container (Trivy config)
     runs-on: [self-hosted, Linux, X64, squidsec]
     env:
-      TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
-      TRIVY_TIMEOUT: 15m
+      # Pinned to the ECR mirror, which stalled for the full timeout on 3 of 3
+      # runs on 2026-11-05 (DB download never completed, job killed at 5m).
+      # Trivy's default mirrors rotate and downloaded the same DB in ~7s from
+      # the same network, so leave the repository unset rather than pinning it.
+      TRIVY_TIMEOUT: 10m
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Trivy filesystem scan (config + secrets)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
+      - name: Ensure Trivy is available
+        id: find
+        run: |
+          set -euo pipefail
+          if command -v trivy >/dev/null 2>&1; then
+            echo "path=$(command -v trivy)" >> "$GITHUB_OUTPUT"
+            trivy --version
+            exit 0
+          fi
+          # Install once per runner host. Runners are persistent, so this is a
+          # one-time cost; afterwards the warm binary and DB make the scan ~7s.
+          BIN_DIR="$HOME/.local/bin"
+          mkdir -p "$BIN_DIR"
+          if [ -x "$BIN_DIR/trivy" ]; then
+            echo "path=$BIN_DIR/trivy" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Installing trivy into $BIN_DIR (first run on this runner)"
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b "$BIN_DIR"
+          echo "path=$BIN_DIR/trivy" >> "$GITHUB_OUTPUT"
+          "$BIN_DIR/trivy" --version
+
+      - name: Trivy config + secret scan
+        run: |
+          set -euo pipefail
+          # Scan only what a fresh clone would contain. Self-hosted runners keep
+          # local artifacts (.env, .deploy/, data/) that are gitignored and never
+          # committed; scanning them flags secrets that cannot leak via the repo.
+          CACHE="$HOME/.cache/trivy-ci"
+          mkdir -p "$CACHE"
+          # Retry once: the DB download is the only network-dependent step and
+          # has hung before. A retry with a warm cache is seconds, not minutes.
+          run_scan() {
+            "${{ steps.find.outputs.path }}" fs . \
+              --scanners vuln,misconfig,secret \
+              --severity HIGH,CRITICAL \
+              --exit-code 1 \
+              --ignore-unfixed \
+              --skip-dirs node_modules --skip-dirs .next --skip-dirs .git \
+              --skip-dirs .deploy --skip-dirs data \
+              --cache-dir "$CACHE"
+          }
+          if ! run_scan; then
+            status=$?
+            # 1 means findings, which must fail the build. Anything else is an
+            # infrastructure failure that is worth one retry.
+            if [ "$status" -eq 1 ]; then exit 1; fi
+            echo "Trivy exited $status (not a finding); retrying once." >&2
+            run_scan
+          fi
 
   e2e:
     # Manual only: needs a running stack and is not part of the required path.

@@ -83,6 +83,20 @@ def _verify_bills() -> str:
     return "ok"
 
 
+def _daily_brief() -> dict[str, Any] | str:
+    """Collect trafficking news and write the day's articles.
+
+    Skipped entirely when NEWSWIRE_ENABLED is off so a deployment without a
+    model key never makes outbound calls.
+    """
+    if not settings.newswire_enabled:
+        return "disabled"
+
+    from app.newswire_ai import run_daily
+
+    return asyncio.run(run_daily(collect=True))
+
+
 def _register_defaults() -> None:
     global _defaults_registered
     with _state_lock:
@@ -95,6 +109,12 @@ def _register_defaults() -> None:
     register("verify_bills", interval * 24, _verify_bills)
     # Widening the bot rules should apply to history, not only new hits.
     register("reclassify_traffic", interval * 6, _reclassify_traffic)
+    # Daily Brief: one collection + article-writing pass per day.
+    register(
+        "daily_brief",
+        max(3600.0, float(settings.newswire_collect_hours or 24.0) * 3600.0),
+        _daily_brief,
+    )
 
 
 def _execute(name: str, job: dict[str, Any]) -> Any:
