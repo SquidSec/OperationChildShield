@@ -406,7 +406,11 @@ async def request_article(
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.4,
-                "max_tokens": 4000,
+                # Reasoning models (DeepSeek v4.x) spend 1-2k tokens on hidden
+                # reasoning before the answer. A 4000 budget truncated the JSON
+                # mid-string and every draft was rejected; 8000 leaves room for
+                # both the reasoning and a 500-word body.
+                "max_tokens": 8000,
                 "response_format": {"type": "json_object"},
             },
         )

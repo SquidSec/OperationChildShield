@@ -25,20 +25,34 @@ const NAV_ITEM_CLASS =
   "inline-flex h-10 w-[9.5rem] shrink-0 snap-start items-center justify-center rounded-full border border-white/25 bg-white/10 px-2 text-center text-[0.8rem] font-semibold leading-tight text-white no-underline backdrop-blur-sm transition-colors hover:border-white/40 hover:bg-white/20 sm:w-[10.5rem] sm:snap-none sm:text-sm";
 
 /**
+ * The two action pages carry a filled accent so they read as the primary
+ * destinations without competing with the rest of the nav. Kept to a single
+ * accent (red) and the same pill geometry, so the row still looks uniform.
+ */
+const NAV_ACCENT_CLASS =
+  "inline-flex h-10 w-[9.5rem] shrink-0 snap-start items-center justify-center rounded-full border-2 border-white/60 bg-red px-2 text-center text-[0.8rem] font-bold leading-tight text-white no-underline shadow-[0_2px_10px_rgba(0,0,0,0.35)] transition-colors hover:border-white hover:bg-[#991b1b] sm:w-[10.5rem] sm:snap-none sm:text-sm";
+
+const NAV_ACCENTS: Record<string, string> = {
+  "/news": NAV_ACCENT_CLASS,
+  "/take-action": NAV_ACCENT_CLASS,
+};
+
+/**
  * /donate gets a per-route CSP (see proxy.ts) so the Donorbox widget can inject
  * its styles. CSP headers only apply on a full document load, so that route must
  * not be reached through client-side routing.
  */
 function NavItem({ href, label }: { href: string; label: string }) {
+  const className = NAV_ACCENTS[href] ?? NAV_ITEM_CLASS;
   if (href === "/donate") {
     return (
-      <a href={href} className={NAV_ITEM_CLASS}>
+      <a href={href} className={className}>
         {label}
       </a>
     );
   }
   return (
-    <Link href={href} className={NAV_ITEM_CLASS}>
+    <Link href={href} className={className}>
       {label}
     </Link>
   );
