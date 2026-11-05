@@ -1,6 +1,6 @@
 # Stay on 3.12: pydantic-core (via pydantic 2.10.x) does not yet ship manylinux
 # wheels for 3.14, so pip falls back to a Rust build that needs gcc/cc.
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 WORKDIR /app
 
