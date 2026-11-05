@@ -120,6 +120,47 @@ def test_classify_routes_story_categories():
     assert newswire_collect.classify("Church hosts vigil for survivors") == "community"
 
 
+def test_relevance_gate_rejects_foreign_coverage():
+    """Only markers that imply US jurisdiction count as US markers.
+
+    "police", "state", and "county" appear in every country. They used to count,
+    which let Delhi Police coverage of an Indian case into a US brief.
+    """
+    foreign = [
+        "Delhi Police Files FIR Against Meta Over Child Sexual Abuse Material",
+        "Delhi police register FIR over child sexual abuse material on Meta platforms",
+        "Australian author sentenced over child exploitation material",
+        "NHRC directs Delhi Police in child abuse material case",
+    ]
+    for title in foreign:
+        assert not newswire_collect.is_relevant(title), title
+
+    domestic = [
+        "Florida man sentenced for child trafficking",
+        "FBI arrests two in Broken Arrow child exploitation probe",
+        "U.S. Attorney announces child exploitation conviction",
+        "Man charged with trafficking a minor in Ohio",
+    ]
+    for title in domestic:
+        assert newswire_collect.is_relevant(title), title
+
+
+def test_trusted_us_feed_skips_geography_gate():
+    """A DOJ release with a local dateline is still a US story.
+
+    The subject gate still applies; only the geography check is skipped.
+    """
+    title = "Nanticoke Man Arraigned on 600 Counts of Child Exploitation"
+    assert not newswire_collect.is_relevant(title)
+    assert newswire_collect.is_relevant(title, require_us=False)
+    # The subject gate is not bypassed for a trusted feed: "exploitation" with
+    # no child term stays out even from DOJ.
+    assert not newswire_collect.is_relevant(
+        "Nanticoke Man Arraigned on 600 Felony Exploitation Counts",
+        require_us=False,
+    )
+
+
 def test_collect_stores_items_and_dedupes(tmp_path, monkeypatch):
     calls = {"n": 0}
 

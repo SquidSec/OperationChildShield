@@ -111,12 +111,14 @@ _TRAFFICKING_TERMS = re.compile(
     re.IGNORECASE,
 )
 
-# The brief covers the United States, so a story needs a US marker. Google News
-# uses the US edition, but still surfaces foreign coverage of the same subject.
+# The brief covers the United States, so a story needs a US marker. Only
+# markers that genuinely imply US jurisdiction count: "police", "state", and
+# "county" are used in every country, so they were removed after Delhi Police
+# coverage of an Indian case cleared the old gate.
 _US_MARKERS = re.compile(
     r"\b(U\.?S\.?|United States|America|American|federal|FBI|ICE|HSI|DHS|"
     r"Justice Department|DOJ|Homeland Security|Congress|Senate|House|"
-    r"state|states|county|sheriff|police|governor|attorney general|"
+    r"governor|attorney general|U\.S\. Attorney|DEA|ATF|USMS|"
     r"Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|"
     r"Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|"
     r"Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|"
@@ -132,11 +134,11 @@ _US_MARKERS = re.compile(
 # mentions "federal" in translation.
 _FOREIGN_MARKERS = re.compile(
     r"\b(Australia|Australian|Canada|Canadian|United Kingdom|Britain|British|"
-    r"England|Scotland|Wales|Ireland|India|Indian|Pakistan|Nigeria|Nigerian|"
-    r"Ghana|Kenya|Philippines|Filipino|Indonesia|Malaysia|Thailand|Vietnam|"
-    r"China|Chinese|Japan|Japanese|Korea|Brazil|Mexican|Mexico|Colombia|"
-    r"Romania|Romanian|Ukraine|Russia|Moldova|Nepal|Bangladesh|Uganda|"
-    r"South Africa|New Zealand)\b",
+    r"England|Scotland|Wales|Ireland|India|Indian|Delhi|Mumbai|Kolkata|Chennai|"
+    r"Pakistan|Nigeria|Nigerian|Ghana|Kenya|Philippines|Filipino|Indonesia|"
+    r"Malaysia|Thailand|Vietnam|China|Chinese|Japan|Japanese|Korea|Brazil|"
+    r"Mexican|Mexico|Colombia|Romania|Romanian|Ukraine|Russia|Moldova|Nepal|"
+    r"Bangladesh|Uganda|South Africa|New Zealand|Meta India|NHRC)\b",
     re.IGNORECASE,
 )
 
@@ -191,10 +193,12 @@ def is_relevant(title: str, summary: str = "", *, require_us: bool = True) -> bo
     if not _TRAFFICKING_TERMS.search(text):
         return False
     if require_us:
-        if not _US_MARKERS.search(text):
+        # A foreign marker anywhere is disqualifying. Checking only the headline
+        # let "Delhi Police ... Meta" through, because "police" used to count as
+        # a US marker and the country was implied rather than stated.
+        if _FOREIGN_MARKERS.search(text) and not _US_MARKERS.search(text):
             return False
-        # A foreign dateline in the headline itself is decisive.
-        if _FOREIGN_MARKERS.search(title) and not _US_MARKERS.search(title):
+        if not _US_MARKERS.search(text):
             return False
     if _CHILD_TERMS.search(text):
         return True
