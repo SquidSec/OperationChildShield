@@ -442,6 +442,42 @@ async def request_article(
         return None
 
 
+def _title_tokens(title: str) -> set[str]:
+    """Content words of a headline, for near-duplicate detection."""
+    stop = {
+        "the", "a", "an", "of", "on", "in", "for", "and", "to", "after", "with",
+        "man", "woman", "men", "arrested", "charged", "faces", "over", "new",
+        "child", "children", "sexual", "abuse", "material", "exploitation",
+        "trafficking", "case", "cases", "investigation", "federal", "court",
+    }
+    return {
+        word.lower().strip(".,'")
+        for word in re.findall(r"[A-Za-z']{3,}", title or "")
+        if word.lower().strip(".,'") not in stop
+    }
+
+
+def is_duplicate_story(title: str, *, threshold: float = 0.6) -> bool:
+    """True when a stored article already covers this headline.
+
+    The same story reaches us from several publishers, and a later run can pick
+    it up again when new coverage arrives. Slugs differ, so a slug check is not
+    enough; compare the content words of the headline instead.
+    """
+    incoming = _title_tokens(title)
+    if len(incoming) < 2:
+        return False
+    for existing in newswire_store.list_articles_summary(limit=100):
+        stored = _title_tokens(str(existing.get("title") or ""))
+        if not stored:
+            continue
+        shared = len(incoming & stored)
+        overlap = shared / min(len(incoming), len(stored))
+        if overlap >= threshold:
+            return True
+    return False
+
+
 def _unique_slug(base: str) -> str:
     """Return a slug that does not collide with an existing article."""
     if not _slug_exists(base):
@@ -497,6 +533,12 @@ async def write_article_from_items(
 
     draft = await request_article(items, client=client, also_week=also_week)
     if draft is None:
+        return None
+
+    # A later run can pick up fresh coverage of a story already published.
+    # Refuse it rather than publishing the same event twice.
+    if is_duplicate_story(draft["title"]):
+        logger.info("Newswire duplicate story skipped: %s", draft["title"][:80])
         return None
 
     slug_base = _slugify(draft["title"])

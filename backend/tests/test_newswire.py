@@ -389,6 +389,30 @@ def test_slugify_produces_url_safe_slug():
     assert newswire_ai._slugify("***") == "daily-brief"
 
 
+def test_duplicate_story_detection():
+    newswire_store.save_article(
+        {
+            "slug": "fbi-arrests-two-in-broken-arrow",
+            "title": "FBI Arrests Two in Broken Arrow After Years-Long Probe",
+            "dek": "d",
+            "body": "word " * 200,
+            "category": "enforcement",
+            "tags": [],
+            "sources": [],
+        }
+    )
+    # Rewording of the same event is caught.
+    assert newswire_ai.is_duplicate_story(
+        "FBI Arrests Two in Broken Arrow Following Years-Long Probe"
+    )
+    # A different event is not.
+    assert not newswire_ai.is_duplicate_story(
+        "Colorado Voters Approve Ballot Measure on Trafficking Sentences"
+    )
+    # Too short to judge is not treated as a duplicate.
+    assert not newswire_ai.is_duplicate_story("Probe")
+
+
 # --- routes -----------------------------------------------------------------
 
 
