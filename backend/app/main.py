@@ -10,6 +10,7 @@ from app.congress_client import CongressClient
 from app.config import settings
 from app.admin_store import init_admin_db
 from app.analytics_store import init_analytics_db
+from app.newswire_store import init_newswire_db
 from app.users_store import init_users_db
 from app.routes import (
     accounts,
@@ -20,6 +21,7 @@ from app.routes import (
     involve,
     members,
     metrics,
+    newswire,
     public_api,
 )
 from app.security import SecurityHeadersMiddleware
@@ -48,6 +50,10 @@ async def lifespan(app: FastAPI):
         init_users_db()
     except Exception:
         logger.exception("User database init failed (non-fatal)")
+    try:
+        init_newswire_db()
+    except Exception:
+        logger.exception("Newswire database init failed (non-fatal)")
     try:
         from app.observability import configure_logging, init_tracing
 
@@ -112,4 +118,5 @@ app.include_router(analytics.router, prefix="/api")
 app.include_router(accounts.router, prefix="/api")
 app.include_router(board.router, prefix="/api")
 app.include_router(public_api.router, prefix="/api")
+app.include_router(newswire.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")

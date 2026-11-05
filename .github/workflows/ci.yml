@@ -95,8 +95,11 @@ jobs:
     name: Container (Trivy config)
     runs-on: [self-hosted, Linux, X64, squidsec]
     env:
-      TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
-      TRIVY_TIMEOUT: 5m
+      # Pinned to the ECR mirror, which stalled for the full timeout on 3 of 3
+      # runs on 2026-11-05 (DB download never completed, job killed at 5m).
+      # Trivy's default mirrors rotate and downloaded the same DB in ~7s from
+      # the same network, so leave the repository unset rather than pinning it.
+      TRIVY_TIMEOUT: 10m
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -131,14 +134,26 @@ jobs:
           # committed; scanning them flags secrets that cannot leak via the repo.
           CACHE="$HOME/.cache/trivy-ci"
           mkdir -p "$CACHE"
-          "${{ steps.find.outputs.path }}" fs . \
-            --scanners vuln,misconfig,secret \
-            --severity HIGH,CRITICAL \
-            --exit-code 1 \
-            --ignore-unfixed \
-            --skip-dirs node_modules --skip-dirs .next --skip-dirs .git \
-            --skip-dirs .deploy --skip-dirs data \
-            --cache-dir "$CACHE"
+          # Retry once: the DB download is the only network-dependent step and
+          # has hung before. A retry with a warm cache is seconds, not minutes.
+          run_scan() {
+            "${{ steps.find.outputs.path }}" fs . \
+              --scanners vuln,misconfig,secret \
+              --severity HIGH,CRITICAL \
+              --exit-code 1 \
+              --ignore-unfixed \
+              --skip-dirs node_modules --skip-dirs .next --skip-dirs .git \
+              --skip-dirs .deploy --skip-dirs data \
+              --cache-dir "$CACHE"
+          }
+          if ! run_scan; then
+            status=$?
+            # 1 means findings, which must fail the build. Anything else is an
+            # infrastructure failure that is worth one retry.
+            if [ "$status" -eq 1 ]; then exit 1; fi
+            echo "Trivy exited $status (not a finding); retrying once." >&2
+            run_scan
+          fi
 
   e2e:
     # Manual only: needs a running stack and is not part of the required path.

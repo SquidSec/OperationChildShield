@@ -25,6 +25,9 @@ Independent agentic recon + AI analysis of the production site (headers, surface
 | Route | Description |
 |-------|-------------|
 | `/` | Member directory with search, party/state filters, lazy-loaded voting records, policy badges per vote, Yes/No pie charts, and infinite scroll |
+| `/news` | **The Daily Brief** — original daily articles on US child trafficking (law enforcement, laws, policy, community), each with sources and share buttons |
+| `/news/[slug]` | Single Daily Brief article: full text, source list, share links, and reporting resources |
+| `/take-action` | Role-based action guide: pick parent, teacher, law enforcement, clinician, under-18, young adult, faith leader, employer, or volunteer |
 | `/member/[bioguideId]` | Full voting record: vote breakdown, policy badges, summary stats, Yes/No pie chart, Congress.gov links, social share |
 | `/bills` | 30 tracked bills in three sections: House roll-call (scored), floor action (tracked only), introduced |
 | `/metrics` | Bill-level roll-call statistics, **state heat map**, state policy-consistency table, charts |
@@ -63,12 +66,44 @@ Gated in [`frontend/src/lib/feature-flags.ts`](frontend/src/lib/feature-flags.ts
 | `POST /api/involve` | Volunteer/advocate signup (JSON body; stored as JSONL under `CACHE_DIR`) |
 | `POST /api/analytics/event` | Records a page view, or an allow-listed action (`share`, `contact_congress`), into server-side SQLite (`analytics.db`). Raw events are not exposed. |
 | `GET /api/impact` | Aggregate counts only: page views, shares, Congress contacts started, and signups. |
+| `GET /api/newswire` | Daily Brief article index (no bodies) with `limit` / `offset` |
+| `GET /api/newswire/{slug}` | One published article: Markdown body, category, tags, and sources |
+| `GET /api/newswire/status` | Collection counters: articles, collected items, last run |
+| `POST /api/newswire/refresh` | Admin-only. Collect feeds now and write new articles (`write=false` collects without publishing). Rate limited to 6 runs/hour. |
 | `GET /api/admin/config` | Public bootstrap config for the admin login (whether a captcha is required and its public site key). |
 | `POST /api/admin/login` | Admin sign in. Requires a Cloudflare Turnstile token; sets an HttpOnly session cookie. |
 | `POST /api/admin/logout` | Destroys the current admin session. |
 | `GET /api/admin/me` | Current admin identity. |
 | `GET /api/admin/traffic?days=N` | Admin-only traffic aggregates: daily views, top pages, referrer domains, engagement actions. |
 | `GET /api/admin/users` | Admin-only list of seeded accounts (no hashes). |
+
+### The Daily Brief (`/news`)
+
+A small newsroom that runs on the existing scheduler thread, with no extra
+service and no new Python dependency.
+
+1. **Collect** (`app/newswire_collect.py`) — fetches a fixed list of public RSS
+   endpoints: Google News queries for child trafficking, enforcement actions,
+   and legislation, plus the Department of Justice press-release feed. A
+   headline is kept only if it carries a trafficking/exploitation term *and* a
+   US marker, so foreign coverage and generic "trafficking" stories are dropped.
+2. **Cluster** (`app/newswire_ai.py`) — headlines that share a rare proper noun
+   (a town or surname) are grouped, so each article covers one story instead of
+   a roundup.
+3. **Write** — the cluster is sent to an OpenAI-compatible chat endpoint with a
+   prompt that forbids copying source text, inventing facts, or identifying
+   victims. The model returns JSON (title, dek, category, tags, Markdown body,
+   cited source indices), which is validated before it is stored.
+4. **Attribute** — sources the model cited are stored, plus any headline whose
+   distinctive name appears in the finished prose, so every article lists what
+   it drew on.
+5. **Serve** — articles live in `newswire.db` under `CACHE_DIR` and are rendered
+   from a strict Markdown subset (`components/news/ArticleBody.tsx`); raw HTML
+   from the model is never inserted.
+
+The job is **off by default**. With `NEWSWIRE_ENABLED=false` or an empty
+`LLM_API_KEY`, nothing leaves the server. Point `LLM_BASE_URL` at a local model
+(for example `http://127.0.0.1:11434/v1`) to run it without a cloud provider.
 
 ### Admin section (`/admin`)
 
@@ -246,6 +281,13 @@ Open http://localhost:3000
 | `NEXT_PUBLIC_API_URL` | — | Browser-facing API URL (frontend) |
 | `API_URL` | — | Server-side API URL inside Docker network |
 | `NEXT_PUBLIC_SITE_URL` | `https://operationchildshield.org` | Canonical site URL for Open Graph metadata |
+| `NEWSWIRE_ENABLED` | `false` | Turn on the Daily Brief collection + writing job |
+| `NEWSWIRE_COLLECT_HOURS` | `24` | Hours between runs |
+| `NEWSWIRE_MAX_ARTICLES_PER_RUN` | `3` | Attempts per run |
+| `NEWSWIRE_MIN_ITEMS` | `3` | Unused headlines needed before writing |
+| `LLM_BASE_URL` | `https://api.x.ai/v1` | OpenAI-compatible chat completions endpoint (xAI, OpenRouter, Ollama, vLLM) |
+| `LLM_MODEL` | `grok-4` | Model name sent to that endpoint |
+| `LLM_API_KEY` | — | Key for the endpoint above; site publishes nothing without it |
 
 See [`.env.example`](.env.example) for a template.
 
@@ -266,8 +308,11 @@ OperationChildShield/
 │   │   ├── scoring.py            # Vote scoring, policy_consistent, internal grades (not exposed)
 │   │   ├── services.py           # Report cards, directory, API serialization
 │   │   ├── metrics.py            # Bill-level roll-call aggregation (no member rankings)
+│   │   ├── newswire_collect.py   # Daily Brief: RSS collection + US relevance gate
+│   │   ├── newswire_ai.py        # Daily Brief: clustering, prompting, validation
+│   │   ├── newswire_store.py     # Daily Brief: SQLite storage
 │   │   └── routes/               # FastAPI routers
-│   └── tests/                    # 128 pytest unit tests (no live API calls)
+│   └── tests/                    # pytest unit tests (no live API calls)
 ├── frontend/
 │   └── src/
 │       ├── app/                  # Next.js App Router pages
