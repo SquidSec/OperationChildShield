@@ -31,6 +31,8 @@ export interface StaticRoute {
 /** Public pages that are always indexable (search/compare are excluded). */
 export const STATIC_PUBLIC_ROUTES: StaticRoute[] = [
   { path: "/", changeFrequency: "daily", priority: 1 },
+  { path: "/news", changeFrequency: "daily", priority: 0.95 },
+  { path: "/take-action", changeFrequency: "monthly", priority: 0.9 },
   { path: "/metrics", changeFrequency: "daily", priority: 0.9 },
   { path: "/bills", changeFrequency: "weekly", priority: 0.9 },
   { path: "/the-facts", changeFrequency: "monthly", priority: 0.7 },
