@@ -78,6 +78,42 @@ def test_parse_feed_tolerates_broken_xml():
     assert newswire_collect.parse_feed("<rss><channel>", {"name": "x"}) == []
 
 
+def test_parse_feed_rejects_dtd_and_entity_expansion():
+    # "Billion laughs": entity expansion is the attack ElementTree does not
+    # protect against, so any document declaring a DTD is refused outright.
+    bomb = """<?xml version="1.0"?>
+<!DOCTYPE lolz [
+  <!ENTITY lol "lol">
+  <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+]>
+<rss version="2.0"><channel><item>
+  <title>&lol2; child trafficking United States</title>
+  <link>https://example.test/x</link>
+</item></channel></rss>"""
+    assert newswire_collect.parse_feed(bomb, {"name": "Test"}) == []
+
+
+def test_collect_skips_oversized_feed(monkeypatch):
+    import asyncio
+
+    monkeypatch.setattr(newswire_collect, "MAX_FEED_BYTES", 100)
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=RSS)
+
+    feeds = ({"name": "Test Wire", "url": "https://example.test/rss", "category": "news"},)
+    monkeypatch.setattr(newswire_collect, "FEEDS", feeds)
+
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await newswire_collect.collect(client=client)
+
+    result = asyncio.run(run())
+    assert result["added"] == 0
+    assert result["failedFeeds"] == 1
+
+
 def test_classify_routes_story_categories():
     assert newswire_collect.classify("Man sentenced to 12 years for trafficking") == "enforcement"
     assert newswire_collect.classify("Senate passes trafficking bill") == "laws"

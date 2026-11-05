@@ -306,20 +306,40 @@ def update_article_body(slug: str, **fields: Any) -> None:
     if not updates:
         return
     _ensure_initialized()
-    sets = ", ".join(f"{key} = ?" for key in updates)
-    values: list[Any] = []
-    for key, value in updates.items():
-        if key in ("tags", "sources"):
-            values.append(json.dumps(value))
-        else:
-            values.append(value)
-    values.extend([_now(), slug])
+
+    def enc(key: str, value: Any) -> Any:
+        return json.dumps(value) if key in ("tags", "sources") else value
+
+    # One static statement: a NULL parameter means "leave this column alone".
+    # Building column names into SQL with an f-string works but is exactly the
+    # pattern that hides a real injection bug, so it is not used anywhere here.
     with _lock:
         conn = _connect()
         try:
             conn.execute(
-                f"UPDATE news_articles SET {sets}, updated_at = ? WHERE slug = ?",
-                values,
+                """
+                UPDATE news_articles SET
+                    title      = COALESCE(?, title),
+                    dek        = COALESCE(?, dek),
+                    body       = COALESCE(?, body),
+                    category   = COALESCE(?, category),
+                    tags       = COALESCE(?, tags),
+                    sources    = COALESCE(?, sources),
+                    status     = COALESCE(?, status),
+                    updated_at = ?
+                WHERE slug = ?
+                """,
+                (
+                    enc("title", updates.get("title")),
+                    enc("dek", updates.get("dek")),
+                    enc("body", updates.get("body")),
+                    enc("category", updates.get("category")),
+                    enc("tags", updates["tags"]) if "tags" in updates else None,
+                    enc("sources", updates["sources"]) if "sources" in updates else None,
+                    enc("status", updates.get("status")),
+                    _now(),
+                    slug,
+                ),
             )
             conn.commit()
         finally:
@@ -330,16 +350,15 @@ def _prune_articles(conn: sqlite3.Connection) -> None:
     count = conn.execute("SELECT COUNT(*) AS n FROM news_articles").fetchone()["n"]
     if count <= _MAX_ARTICLES:
         return
-    keep = conn.execute(
-        "SELECT id FROM news_articles ORDER BY created_at DESC LIMIT ?",
-        (_ARTICLE_PRUNE_TO,),
-    ).fetchall()
-    keep_ids = [r["id"] for r in keep]
-    if not keep_ids:
-        return
-    placeholders = ",".join("?" for _ in keep_ids)
+    # A LIMIT subquery keeps the statement static; building a dynamic NOT IN
+    # list would require interpolating placeholder text into SQL.
     conn.execute(
-        f"DELETE FROM news_articles WHERE id NOT IN ({placeholders})", keep_ids
+        """
+        DELETE FROM news_articles WHERE id NOT IN (
+            SELECT id FROM news_articles ORDER BY created_at DESC LIMIT ?
+        )
+        """,
+        (_ARTICLE_PRUNE_TO,),
     )
     conn.commit()
 
@@ -353,21 +372,18 @@ def prune_items() -> int:
             count = conn.execute("SELECT COUNT(*) AS n FROM news_items").fetchone()["n"]
             if count <= _MAX_ITEMS:
                 return 0
-            keep = conn.execute(
-                "SELECT id FROM news_items ORDER BY collected_at DESC LIMIT ?",
-                (_ITEM_PRUNE_TO,),
-            ).fetchall()
-            keep_ids = [r["id"] for r in keep]
-            if not keep_ids:
-                return 0
-            placeholders = ",".join("?" for _ in keep_ids)
-            before = conn.execute("SELECT COUNT(*) AS n FROM news_items").fetchone()["n"]
+            # Static statement with a LIMIT subquery (see _prune_articles).
             conn.execute(
-                f"DELETE FROM news_items WHERE id NOT IN ({placeholders})", keep_ids
+                """
+                DELETE FROM news_items WHERE id NOT IN (
+                    SELECT id FROM news_items ORDER BY collected_at DESC LIMIT ?
+                )
+                """,
+                (_ITEM_PRUNE_TO,),
             )
             conn.commit()
             after = conn.execute("SELECT COUNT(*) AS n FROM news_items").fetchone()["n"]
-            return int(before - after)
+            return int(count - after)
         finally:
             conn.close()
 

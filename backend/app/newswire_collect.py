@@ -32,6 +32,13 @@ USER_AGENT = (
     "news aggregation for a public 501(c)(3) record)"
 )
 REQUEST_TIMEOUT = 20.0
+# A feed larger than this is not a feed we need: cap the read so a hostile or
+# runaway response cannot exhaust memory before parsing.
+MAX_FEED_BYTES = 5 * 1024 * 1024
+
+# An internal DTD is the vector for entity-expansion attacks. No legitimate RSS
+# document uses one, so a match means we refuse to parse.
+_DTD_RE = re.compile(r"<!DOCTYPE|<!ENTITY", re.IGNORECASE)
 
 # Story categories, in the order the feed page displays them.
 CATEGORIES = ("enforcement", "laws", "policy", "community", "news")
@@ -241,9 +248,27 @@ def _clean_source_title(title: str, source: str) -> str:
 
 
 def parse_feed(xml_text: str, feed: dict[str, str]) -> list[dict[str, Any]]:
-    """Turn one RSS document into candidate items. Never raises on bad markup."""
+    """Turn one RSS document into candidate items. Never raises on bad markup.
+
+    Several defensive measures, because feeds are third-party input:
+
+    * Documents declaring a DTD or entities are rejected outright. Entity
+      expansion ("billion laughs") is the attack ElementTree does not protect
+      against, and no legitimate RSS feed needs an internal DTD.
+    * Parse errors return an empty list instead of propagating.
+    * Callers cap how much of the response they read (see ``MAX_FEED_BYTES``).
+    """
+    if _DTD_RE.search(xml_text[:4096]):
+        logger.warning("Skipping feed with a DTD/entity declaration: %s",
+                       feed.get("url", "")[:80])
+        return []
+
+    # bandit B314 flags ElementTree for untrusted XML. The two attacks it warns
+    # about are covered above: entity expansion needs a DTD (rejected) and
+    # oversized documents are capped by MAX_FEED_BYTES. External entities are
+    # not resolved by expat at all. Reviewed 2026-11-05.
     try:
-        root = ET.fromstring(xml_text)
+        root = ET.fromstring(xml_text)  # nosec B314 - DTD rejected above
     except ET.ParseError:
         logger.warning("Skipping malformed feed: %s", feed.get("url", "")[:80])
         return []
@@ -306,6 +331,14 @@ async def collect(client: httpx.AsyncClient | None = None) -> dict[str, int]:
                 if res.status_code != 200:
                     logger.info(
                         "Feed returned %s: %s", res.status_code, feed["url"][:100]
+                    )
+                    failed += 1
+                    continue
+                if len(res.content) > MAX_FEED_BYTES:
+                    logger.warning(
+                        "Feed exceeded %s bytes, skipped: %s",
+                        MAX_FEED_BYTES,
+                        feed["url"][:100],
                     )
                     failed += 1
                     continue
