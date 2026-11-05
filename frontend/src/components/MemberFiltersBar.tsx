@@ -58,11 +58,11 @@ export function MemberFiltersBar() {
   }
 
   return (
-    <div className="mb-8 w-full min-w-0">
+    <div className="mb-6 w-full min-w-0 sm:mb-8">
       <p className="text-center text-sm font-semibold text-muted uppercase tracking-wider mb-3">
         Filter by Party, State &amp; Chamber
       </p>
-      <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-3 max-w-[860px] mx-auto w-full min-w-0">
+      <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-row sm:flex-wrap sm:justify-center max-w-[860px] mx-auto w-full min-w-0">
         <label className="flex flex-col gap-1 w-full min-w-0 sm:min-w-[10rem] sm:flex-1 sm:max-w-[14rem]">
           <span className="text-xs font-semibold text-muted px-1">Party</span>
           <select
@@ -98,7 +98,7 @@ export function MemberFiltersBar() {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 w-full min-w-0 sm:min-w-[9rem] sm:flex-1 sm:max-w-[12rem]">
+        <label className="col-span-2 flex flex-col gap-1 w-full min-w-0 sm:col-span-1 sm:min-w-[9rem] sm:flex-1 sm:max-w-[12rem]">
           <span className="text-xs font-semibold text-muted px-1">Chamber</span>
           <select
             aria-label="Filter by chamber"
@@ -115,7 +115,7 @@ export function MemberFiltersBar() {
           </select>
         </label>
 
-        <div className="flex w-full sm:w-auto items-end">
+        <div className="col-span-2 flex w-full items-end sm:w-auto">
           <button
             type="button"
             onClick={clearFilters}

@@ -6,6 +6,8 @@ import { ENABLE_BOARD_PAGE, ENABLE_DONATE_PAGE } from "@/lib/feature-flags";
 /** Ordered for engagement: explore data first, then act, then org/legal. */
 const NAV_LINKS = [
   { href: "/", label: "Find Lawmakers" },
+  { href: "/news", label: "The Daily Brief" },
+  { href: "/take-action", label: "Take Action" },
   { href: "/metrics", label: "See the Numbers" },
   { href: "/the-facts", label: "The Facts" },
   { href: "/bills", label: "The Bills" },
@@ -20,7 +22,7 @@ const NAV_LINKS = [
 ] as const;
 
 const NAV_ITEM_CLASS =
-  "inline-flex h-10 w-[10.5rem] shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 px-2 text-center text-sm font-semibold leading-tight text-white no-underline backdrop-blur-sm transition-colors hover:border-white/40 hover:bg-white/20";
+  "inline-flex h-10 w-[9.5rem] shrink-0 snap-start items-center justify-center rounded-full border border-white/25 bg-white/10 px-2 text-center text-[0.8rem] font-semibold leading-tight text-white no-underline backdrop-blur-sm transition-colors hover:border-white/40 hover:bg-white/20 sm:w-[10.5rem] sm:snap-none sm:text-sm";
 
 /**
  * /donate gets a per-route CSP (see proxy.ts) so the Donorbox widget can inject
@@ -48,7 +50,7 @@ export function Header() {
       <div className="absolute top-4 right-4 z-[3]">
         <ThemeToggle />
       </div>
-      <div className="relative z-[2] w-full max-w-[900px] px-4 py-6 sm:py-0">
+      <div className="relative z-[2] w-full max-w-[900px] px-4 py-4 sm:py-0">
         <Link href="/" className="block text-white no-underline hover:opacity-95 transition-opacity">
           <Image
             src="/images/ocs-v2-icon-inverted.png"
@@ -80,7 +82,7 @@ export function Header() {
         </Link>
         <nav
           aria-label="Main navigation"
-          className="mt-5 sm:mt-6 flex flex-wrap justify-center items-center gap-2 sm:gap-3"
+          className="mt-4 -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto py-0.5 pl-4 pr-4 [scrollbar-width:none] sm:mx-0 sm:mt-6 sm:flex-wrap sm:justify-center sm:gap-3 sm:overflow-visible sm:py-0 sm:pl-0 sm:pr-0 [&::-webkit-scrollbar]:hidden"
         >
           {NAV_LINKS.map(({ href, label }) => (
             <NavItem key={href} href={href} label={label} />
