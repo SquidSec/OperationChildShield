@@ -25,9 +25,13 @@ jobs:
       # `.github/dependabot.yml` configures grouped updates, so the PRs that
       # reach here are group PRs. Guard on both the update type and a non-empty
       # dependency list; anything else needs a human.
+      #
+      # The list output is `dependency-names`. v3 dropped the older
+      # `dependencies` name, and reading the missing output made this condition
+      # always false, so auto-merge silently stopped running.
       - name: Enable auto-merge (grouped patch/minor only)
         if: |
-          steps.meta.outputs.dependencies != '' && (
+          steps.meta.outputs.dependency-names != '' && (
             steps.meta.outputs.update-type == 'version-update:semver-patch' ||
             steps.meta.outputs.update-type == 'version-update:semver-minor'
           )

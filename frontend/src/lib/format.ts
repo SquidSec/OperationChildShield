@@ -140,20 +140,26 @@ export function voteSortOrder(vote: string): number {
   return 0;
 }
 
-/** Format an ISO-8601 UTC timestamp with an explicit UTC time zone label. */
+/**
+ * Format an ISO-8601 UTC timestamp with an explicit UTC time zone label.
+ *
+ * Built by hand instead of via `toLocaleString`: the `timeZoneName` option
+ * needs full ICU data, and its first call took ~6s on the CI runner, which
+ * timed the unit test out at 5s. The values here are always UTC, so the
+ * numeric fields can be read straight off the Date.
+ */
 export function formatUtcTimestamp(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
 
-  return date.toLocaleString("en-US", {
-    timeZone: "UTC",
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-    timeZoneName: "short",
-  });
+  const hours = date.getUTCHours();
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  const meridiem = hours < 12 ? "AM" : "PM";
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  return (
+    `${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}, ` +
+    `${hour12}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())} ` +
+    `${meridiem} UTC`
+  );
 }
