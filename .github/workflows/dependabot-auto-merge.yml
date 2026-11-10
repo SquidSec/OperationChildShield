@@ -26,9 +26,9 @@ jobs:
       # reach here are group PRs. Guard on both the update type and a non-empty
       # dependency list; anything else needs a human.
       #
-      # The list output is `dependency-names`. v3 dropped the older
-      # `dependencies` name, and reading the missing output made this condition
-      # always false, so auto-merge silently stopped running.
+      # The list output is `dependency-names`; the guard previously read
+      # `dependencies`, which this action never defined. The expression
+      # resolved to an empty string, so the step was skipped on every run.
       - name: Enable auto-merge (grouped patch/minor only)
         if: |
           steps.meta.outputs.dependency-names != '' && (
