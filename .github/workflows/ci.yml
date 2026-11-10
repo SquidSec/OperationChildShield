@@ -94,12 +94,6 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Container (Trivy config)
     runs-on: [self-hosted, Linux, X64, squidsec]
-    env:
-      # Pinned to the ECR mirror, which stalled for the full timeout on 3 of 3
-      # runs on 2026-11-05 (DB download never completed, job killed at 5m).
-      # Trivy's default mirrors rotate and downloaded the same DB in ~7s from
-      # the same network, so leave the repository unset rather than pinning it.
-      TRIVY_TIMEOUT: 10m
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -126,6 +120,32 @@ jobs:
           echo "path=$BIN_DIR/trivy" >> "$GITHUB_OUTPUT"
           "$BIN_DIR/trivy" --version
 
+      # The vulnerability DB is a 133 MB OCI artifact. Downloading it inside the
+      # scan made a slow registry stall the whole gate: on 2026-11-08 it pulled
+      # at ~200 KB/s and hit the timeout on 4 of 4 PR runs. It now gets its own
+      # step with retries, and the scan reads the cached copy with
+      # --skip-db-update, so a stalled download can never fail a scan.
+      - name: Download Trivy vulnerability DB
+        id: db
+        run: |
+          set -euo pipefail
+          CACHE="$HOME/.cache/trivy-ci"
+          mkdir -p "$CACHE"
+          for attempt in 1 2 3; do
+            if "${{ steps.find.outputs.path }}" fs --download-db-only \
+                 --cache-dir "$CACHE" --timeout 20m .; then
+              echo "cached=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Trivy DB download failed (attempt $attempt of 3)." >&2
+            sleep 15
+          done
+          # Keep the gate usable when the registry is unreachable. The
+          # misconfig and secret scanners below still run, and backend pytest
+          # gates on pip-audit, which covers the same Python advisories.
+          echo "cached=false" >> "$GITHUB_OUTPUT"
+          echo "::warning title=Trivy::Vulnerability DB unavailable; scanning config and secrets only."
+
       - name: Trivy config + secret scan
         run: |
           set -euo pipefail
@@ -133,26 +153,34 @@ jobs:
           # local artifacts (.env, .deploy/, data/) that are gitignored and never
           # committed; scanning them flags secrets that cannot leak via the repo.
           CACHE="$HOME/.cache/trivy-ci"
-          mkdir -p "$CACHE"
-          # Retry once: the DB download is the only network-dependent step and
-          # has hung before. A retry with a warm cache is seconds, not minutes.
-          run_scan() {
-            "${{ steps.find.outputs.path }}" fs . \
-              --scanners vuln,misconfig,secret \
-              --severity HIGH,CRITICAL \
-              --exit-code 1 \
-              --ignore-unfixed \
-              --skip-dirs node_modules --skip-dirs .next --skip-dirs .git \
-              --skip-dirs .deploy --skip-dirs data \
-              --cache-dir "$CACHE"
-          }
-          if ! run_scan; then
-            status=$?
-            # 1 means findings, which must fail the build. Anything else is an
-            # infrastructure failure that is worth one retry.
-            if [ "$status" -eq 1 ]; then exit 1; fi
-            echo "Trivy exited $status (not a finding); retrying once." >&2
-            run_scan
+          scanners="misconfig,secret"
+          if [ "${{ steps.db.outputs.cached }}" = "true" ]; then
+            scanners="vuln,$scanners"
+          fi
+
+          set +e
+          "${{ steps.find.outputs.path }}" fs . \
+            --scanners "$scanners" \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --skip-db-update \
+            --skip-dirs node_modules --skip-dirs .next --skip-dirs .git \
+            --skip-dirs .deploy --skip-dirs data \
+            --cache-dir "$CACHE"
+          status=$?
+          set -e
+
+          # 1 means findings, which must fail the build. Anything else is
+          # Trivy failing to run at all, and is surfaced as its own error
+          # instead of being reported as a clean scan.
+          if [ "$status" -eq 1 ]; then
+            echo "::error title=Trivy::HIGH or CRITICAL findings above."
+            exit 1
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo "::error title=Trivy::Scan did not complete (exit $status)."
+            exit "$status"
           fi
 
   e2e:
